@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banco Acme - Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="dashboard-body">
+    <nav class="sidebar glass-panel">
+        <div class="logo">
+            <h2>Banco Acme</h2>
+        </div>
+        <ul class="nav-links">
+            <li><a href="#" data-target="resume" class="active">Resumen</a></li>
+            <li><a href="#" data-target="transactions">Transacciones</a></li>
+            <li><a href="#" data-target="deposit">Consignación</a></li>
+            <li><a href="#" data-target="withdraw">Retiro</a></li>
+            <li><a href="#" data-target="services">Pago Servicios</a></li>
+            <li><a href="#" data-target="certificate">Certificado</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <button id="logoutBtn" class="btn btn-outline text-danger w-100">Cerrar Sesión</button>
+        </div>
+    </nav>
+    
+    <main class="main-content">
+        <header class="topbar glass-panel">
+            <h1 id="pageTitle">Resumen de Cuenta</h1>
+            <div class="user-info">
+                <span id="userNameDisplay">Cargando...</span>
+                <div class="avatar" id="userAvatar">U</div>
+            </div>
+        </header>
+        
+        <div class="content-area">
+            <!-- Resumen View -->
+            <section id="resume" class="view-section active">
+                <div class="cards-grid">
+                    <div class="account-card premium-card glass-panel dark" style="background: linear-gradient(135deg, #1e3a8a, #3b82f6);">
+                        <h3>Saldo Actual</h3>
+                        <div class="balance" id="currentBalance">$0.00</div>
+                        <div class="account-details">
+                            <div>
+                                <span class="label">Número de Cuenta</span>
+                                <span class="value" id="accountNumberDisplay">Cargando...</span>
+                            </div>
+                            <div>
+                                <span class="label">Miembro desde</span>
+                                <span class="value" id="creationDateDisplay">Cargando...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Últimas transacciones View -->
+            <section id="transactions" class="view-section">
+                <div class="glass-panel p-4">
+                    <div class="flex-between mb-4">
+                        <h2>Últimas 10 Transacciones</h2>
+                        <button id="printTransactionsBtn" class="btn btn-outline">Imprimir</button>
+                    </div>
+                    <div class="table-responsive printable" id="transactionsPrintArea">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Referencia</th>
+                                    <th>Tipo</th>
+                                    <th>Concepto</th>
+                                    <th>Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionsTableBody">
+                                <!-- Filas dinámicas -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Consignación View -->
+            <section id="deposit" class="view-section">
+                <div class="glass-panel p-4 max-w-md mx-auto">
+                    <h2>Consignación Electrónica</h2>
+                    <div class="user-summary-box my-4">
+                        <p><strong>Cuenta:</strong> <span class="acc-num-label"></span></p>
+                        <p><strong>Titular:</strong> <span class="acc-name-label"></span></p>
+                    </div>
+                    <form id="depositForm">
+                        <div class="form-group">
+                            <label for="depositAmount">Cantidad a Consignar ($)</label>
+                            <input type="number" id="depositAmount" min="1" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Realizar Consignación</button>
+                    </form>
+                </div>
+            </section>
+            
+            <!-- Retiro View -->
+            <section id="withdraw" class="view-section">
+                <div class="glass-panel p-4 max-w-md mx-auto">
+                    <h2>Retiro de Dinero</h2>
+                    <div class="user-summary-box my-4">
+                        <p><strong>Cuenta:</strong> <span class="acc-num-label"></span></p>
+                        <p><strong>Titular:</strong> <span class="acc-name-label"></span></p>
+                    </div>
+                    <form id="withdrawForm">
+                        <div class="form-group">
+                            <label for="withdrawAmount">Cantidad a Retirar ($)</label>
+                            <input type="number" id="withdrawAmount" min="1" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Realizar Retiro</button>
+                    </form>
+                </div>
+            </section>
+            
+            <!-- Pago de Servicios View -->
+            <section id="services" class="view-section">
+                <div class="glass-panel p-4 max-w-md mx-auto">
+                    <h2>Pago de Servicios Públicos</h2>
+                    <div class="user-summary-box my-4">
+                        <p><strong>Cuenta:</strong> <span class="acc-num-label"></span></p>
+                        <p><strong>Titular:</strong> <span class="acc-name-label"></span></p>
+                    </div>
+                    <form id="servicesForm">
+                        <div class="form-group">
+                            <label for="serviceType">Servicio Público</label>
+                            <select id="serviceType" required>
+                                <option value="">Seleccione...</option>
+                                <option value="Energía">Energía</option>
+                                <option value="Agua">Agua</option>
+                                <option value="Gas Natural">Gas Natural</option>
+                                <option value="Internet">Internet</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="serviceRef">Referencia de Pago</label>
+                            <input type="text" id="serviceRef" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="serviceAmount">Valor a Pagar ($)</label>
+                            <input type="number" id="serviceAmount" min="1" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Pagar Servicio</button>
+                    </form>
+                </div>
+            </section>
+            
+            <!-- Certificado Bancario -->
+            <section id="certificate" class="view-section">
+                <div class="glass-panel p-4 max-w-lg mx-auto">
+                    <div class="flex-between mb-4">
+                        <h2>Certificado Bancario</h2>
+                        <button id="printCertBtn" class="btn btn-outline">Imprimir</button>
+                    </div>
+                    <div class="certificate-box printable" id="certificatePrintArea">
+                        <div class="cert-header">
+                            <h2 class="cert-logo">Banco Acme</h2>
+                            <p>Nit: 800.123.456-7</p>
+                        </div>
+                        <div class="cert-body mt-4">
+                            <h3 class="text-center mb-4">CERTIFICA</h3>
+                            <p>Que el(la) señor(a) <strong id="certName"></strong>, identificado(a) con <span id="certDocType"></span> número <strong id="certDocNumber"></strong>, tiene una cuenta bancaria activa con nuestra entidad.</p>
+                            <p class="mt-2"><strong>Número de cuenta:</strong> <span id="certAccount"></span></p>
+                            <p><strong>Fecha de apertura:</strong> <span id="certDate"></span></p>
+                            <p class="mt-4">Se expide el presente certificado a solicitud del interesado(a), el día <strong id="certToday"></strong>.</p>
+                        </div>
+                        <div class="cert-footer mt-5 text-center">
+                            <p>___________________________</p>
+                            <p>Atención al Cliente<br>Banco Acme</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+        </div>
+    </main>
+
+    <!-- Modal for transaction print summary -->
+    <div id="printModal" class="modal">
+        <div class="modal-content glass-panel" style="max-width: 450px;">
+            <span class="close-modal" id="closePrintModal">&times;</span>
+            <div id="printVoucherArea" class="printable p-4" style="background: white; border: 1px dashed #ccc;">
+                <h3 class="text-center mb-2">Comprobante de Transacción</h3>
+                <h4 class="text-center mb-4 text-primary">Banco Acme</h4>
+                <div id="voucherDetails" class="mt-4">
+                    <!-- Contenido dinámico del voucher -->
+                </div>
+                <div class="text-center mt-5" style="border-top: 1px dashed #ccc; padding-top: 10px; font-size: 0.8rem; color: #666;">
+                    Gracias por confiar en Banco Acme
+                </div>
+            </div>
+            <div class="text-center mt-4 hide-on-print">
+                <button id="printVoucherBtn" class="btn btn-primary">Imprimir Comprobante</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor Toast -->
+    <div id="toastContainer"></div>
+    
+    <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>
