@@ -3,57 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Banco Acme - Recuperar Contraseña</title>
+    <title>Banco Acme - Recuperar Acceso</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
-    <div class="container auth-container">
-        <div class="auth-card glass-panel">
-            <div class="logo">
-                <h2>Banco Acme</h2>
+<body class="split-layout">
+    <div class="split-left">
+        <div class="brand">
+            <img src="img/ChatGPT Image 10 abr 2026, 08_13_43 a.m..png" alt="Banco Acme Logo" class="logo-img">
+            <h1>Banco Acme.</h1>
+            <p>Tu privacidad asegurada. Recupera tu acceso rápidamente.</p>
+        </div>
+    </div>
+    <div class="split-right">
+        <div class="auth-wrapper">
+            <div class="auth-header">
+                <h2>Recuperación</h2>
+                <p class="text-muted">Paso 1: Confírmanos tu identidad.</p>
             </div>
-            <h1>Recuperar Contraseña</h1>
             
-            <form id="recoverForm">
-                <p class="subtitle">Ingresa tus datos para validar tu identidad</p>
-                <div class="form-group">
-                    <label for="docType">Tipo de Identificación</label>
+            <form id="recoverForm" class="minimal-form">
+                <div class="input-modern">
                     <select id="docType" required>
-                        <option value="">Seleccione...</option>
-                        <option value="CC">Cédula de Ciudadanía</option>
-                        <option value="CE">Cédula de Extranjería</option>
+                        <option value="" disabled selected>Tipo Documento</option>
+                        <option value="CC">Cédula</option>
+                        <option value="CE">Extranjería</option>
                         <option value="NIT">NIT</option>
-                        <option value="TI">Tarjeta de Identidad</option>
+                        <option value="TI">Tarjeta</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="docNumber">Número de Identificación</label>
-                    <input type="text" id="docNumber" required>
+                <div class="input-modern">
+                    <input type="text" id="docNumber" placeholder="Número Identificación" required>
                 </div>
-                <div class="form-group">
-                    <label for="email">Correo Electrónico</label>
-                    <input type="email" id="email" required>
+                <div class="input-modern">
+                    <input type="email" id="email" placeholder="Correo Electrónico vinculado" required>
                 </div>
-                <div class="form-actions space-between">
-                    <a href="index.html" class="btn btn-secondary">Cancelar</a>
-                    <button type="submit" class="btn btn-primary">Validar</button>
+                <button type="submit" class="btn-premium full-w" style="margin-top: 1.5rem;">Verificar Identidad</button>
+                <div class="auth-footer-modern">
+                    <a href="index.html">← Regresar al inicio</a>
                 </div>
             </form>
 
-            <form id="newPasswordForm" class="hidden">
-                <p class="subtitle">Validación exitosa. Ingresa tu nueva contraseña</p>
-                <div class="form-group">
-                    <label for="newPassword">Nueva Contraseña</label>
-                    <input type="password" id="newPassword" required>
+            <form id="newPasswordForm" class="minimal-form hidden">
+                <div style="background: rgba(52, 199, 89, 0.1); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; text-align: center;">
+                    <p style="color: #248a3d; font-weight: 600; font-size: 0.95rem;">✓ Verificación exitosa</p>
+                    <p style="font-size: 0.85rem; color: #424245; margin-top: 0.2rem;">Crea tu nueva contraseña de acceso.</p>
                 </div>
-                <div class="form-group">
-                    <label for="confirmPassword">Confirmar Contraseña</label>
-                    <input type="password" id="confirmPassword" required>
+                <div class="input-modern">
+                    <input type="password" id="newPassword" placeholder="Nueva Contraseña" required>
                 </div>
-                <div class="form-actions space-between">
-                    <a href="index.html" class="btn btn-secondary">Cancelar</a>
-                    <button type="submit" class="btn btn-primary">Guardar Contraseña</button>
+                <div class="input-modern">
+                    <input type="password" id="confirmPassword" placeholder="Confirmar Contraseña" required>
                 </div>
+                <button type="submit" class="btn-premium full-w" style="margin-top: 1.5rem;">Guardar y Entrar</button>
             </form>
         </div>
     </div>

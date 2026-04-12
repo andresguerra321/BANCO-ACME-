@@ -22,6 +22,23 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     setupForms();
     setupPrintFunctionality();
+    
+    // Ejecutar petición a API pública
+    loadExchangeRates();
+
+    // ==========================================
+    // TEMA 8: EVENTOS PERSONALIZADOS (CustomEvents)
+    // ==========================================
+    // El Dashboard ahora "escucha" pacíficamente a que ocurra nuestro propio evento inventado,
+    // separando por completo la interfaz visual de la matemática de las transacciones.
+    document.addEventListener('bancoAcme:nuevaTransaccion', (e) => {
+        const transaccion = e.detail;
+        console.log('✅ Se detectó una nueva transacción mediante CustomEvent:', transaccion);
+        
+        // Solo cuando escuchamos el evento actualizamos la pantalla automáticamente
+        updateResumeView();
+        updateTransactionsView();
+    });
 });
 
 function initUI() {
@@ -73,7 +90,7 @@ function updateTransactionsView() {
             <td>${tx.reference}</td>
             <td><span class="type-badge ${typeClass}">${tx.type}</span></td>
             <td>${tx.concept}</td>
-            <td class="${valClass}">${operator} ${formatCurrency(tx.value)}</td>
+            <td class="${valClass} text-right">${operator} ${formatCurrency(tx.value)}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -105,8 +122,20 @@ function registerTransaction(type, concept, value) {
 
     currentUser.transactions.push(transaction);
     updateUser(currentUser);
-    updateResumeView();
-    updateTransactionsView();
+    
+    // ==========================================
+    // TEMA 8: Despachando nuestro CustomEvent
+    // ==========================================
+    // Ya NO llamamos a updateResumeView() ni updateTransactionsView() directamente, 
+    // previniendo código enredado o redundancia.
+    
+    // Empaquetamos la variable 'transaction' en el objeto 'detail'
+    const eventoDinamico = new CustomEvent('bancoAcme:nuevaTransaccion', { 
+        detail: transaction 
+    });
+    
+    // Disparamos nuestro propio evento a todo el documento
+    document.dispatchEvent(eventoDinamico);
     
     return transaction;
 }
@@ -117,14 +146,15 @@ function showPrintModalForTransaction(tx) {
     
     const detailsDiv = document.getElementById('voucherDetails');
     detailsDiv.innerHTML = `
-        <p><strong>Fecha:</strong> ${formatDate(tx.date)}</p>
-        <p><strong>Referencia:</strong> ${tx.reference}</p>
-        <p><strong>Tipo:</strong> ${tx.type}</p>
-        <p><strong>Concepto:</strong> ${tx.concept}</p>
-        <p><strong>Valor:</strong> <span style="font-size: 1.2rem; font-weight: bold;">${operator} ${formatCurrency(tx.value)}</span></p>
-        <hr style="margin: 1rem 0; border: none; border-top: 1px dashed #ccc;">
-        <p><strong>Titular:</strong> ${currentUser.names} ${currentUser.surnames}</p>
-        <p><strong>N° Cuenta:</strong> ${currentUser.accountNumber}</p>
+        <p><span>Fecha:</span> <strong>${formatDate(tx.date)}</strong></p>
+        <p><span>Referencia:</span> <strong>${tx.reference}</strong></p>
+        <p><span>Tipo:</span> <strong>${tx.type}</strong></p>
+        <p><span>Concepto:</span> <strong style="max-width:200px; text-align:right;">${tx.concept}</strong></p>
+        <p><span>Valor Final:</span> <strong style="font-size: 1.25rem;">${operator} ${formatCurrency(tx.value)}</strong></p>
+        <p style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #d2d2d7; flex-direction:column; align-items:center; ">
+            <span style="font-size:0.8rem; margin-bottom:5px;">Responsable Titular:</span>
+            <strong>${currentUser.names} ${currentUser.surnames}</strong>
+        </p>
     `;
     
     const modal = document.getElementById('printModal');
@@ -310,5 +340,79 @@ function setupPrintFunctionality() {
         printVoucherBtn.addEventListener('click', () => {
             window.print();
         });
+    }
+}
+
+/**
+ * ==============================================================
+ * TEMAS 6, 7 y 10: Solicitudes (Fetch) y Manipulación Avanzada
+ * ==============================================================
+ */
+async function loadExchangeRates() {
+    const container = document.getElementById('tasasContainer');
+    const status = document.getElementById('tasasStatus');
+    if (!container || !status) return;
+
+    try {
+        // TEMA 10: Solicitudes (fetch API real)
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        if (!response.ok) throw new Error('Error en la red');
+        
+        const data = await response.json();
+        const rates = {
+            'Pesos (COP)': data.rates.COP,
+            'Euros (EUR)': data.rates.EUR,
+            'Libras (GBP)': data.rates.GBP
+        };
+
+        // TEMA 6 y 7: Manipulación Avanzada del DOM y Jerarquía de Nodos
+        
+        // 1. Limpiamos el contenedor usando recorrido y jerarquía (Más veloz que innerHTML = '')
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        // 2. DocumentFragment: Un "DOM invisible" que ayuda al rendimiento
+        // Al armar los nodos en este fragmento virtual, el navegador no redibuja la pantalla muchas veces
+        const fragment = document.createDocumentFragment();
+
+        for (const [currencyName, rateValue] of Object.entries(rates)) {
+            // TEMA 6: Creación de Nodos directos y clases
+            const card = document.createElement('div');
+            card.classList.add('balance-meta');
+            card.style.flex = '1';
+            card.style.minWidth = '140px';
+            card.style.padding = '1rem';
+            card.style.borderRadius = '12px';
+            card.style.border = '1px solid #d2d2d7';
+
+            const nameEl = document.createElement('div');
+            nameEl.classList.add('meta-label');
+            nameEl.textContent = `1 Dólar =`;
+
+            const valueEl = document.createElement('strong');
+            valueEl.style.fontSize = '1.3rem';
+            valueEl.style.display = 'block';
+            valueEl.style.marginTop = '0.5rem';
+            valueEl.textContent = `${rateValue.toLocaleString('es-CO')} ${currencyName.substring(0, 3)}`;
+
+            // TEMA 7: Ensamblaje de jerarquías avanzadas (usando .append en lugar de innerHTML)
+            card.append(nameEl, valueEl); 
+            
+            // Insertamos la tarjeta en nuestro DOM Virtual
+            fragment.append(card);
+        }
+
+        // 3. Un solo impacto a la vista del usuario
+        // Metemos el paquete completo al DOM real
+        container.append(fragment);
+        
+        status.textContent = 'Actualizado ✅';
+        status.className = 'type-badge type-consignacion';
+
+    } catch (error) {
+        console.error('Error fetching rates:', error);
+        status.textContent = 'Fallo al conectar';
+        status.className = 'type-badge type-retiro';
     }
 }
