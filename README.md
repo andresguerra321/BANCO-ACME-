@@ -39,3 +39,5 @@ Este repositorio contiene la solución al caso práctico del **Banco Acme**, una
 - **Vanilla ES Modules**: Uso adecuado de prácticas modernas de Clean Code que particionan el sistema en módulos reusables (`js/storage.js`, `js/auth.js`, etc.).
 - **Patrones de Diseño UI Contemporáneos**: Implementación de Grids escalables y estilización unificada que prescinde de frameworks voluminosos obteniendo alto rendimiento y Responsive Design total. 
 - **Glassmorphism Theme Style**: Implementación y despliegue del estilo visual `Glassmorphism` lo que brinda elegancia, modernismo y credibilidad acorde al nivel institucional de "Banco Acme".
+
+*Autores*: Andrés Felipe Guerra | Camilo Andrés Garcia
