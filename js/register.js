@@ -11,6 +11,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const formContainer = document.getElementById('registerFormContainer');
     const successContainer = document.getElementById('registerSuccess');
 
+    const docNumberInput = document.getElementById('docNumber');
+    const docTypeSelect = document.getElementById('docType');
+    const docHint = docNumberInput?.nextElementSibling;
+
+    if (docTypeSelect && docNumberInput) {
+        docTypeSelect.addEventListener('change', () => {
+            const type = docTypeSelect.value;
+            let minLen = 8;
+            if (type === 'CE') minLen = 6;
+            if (type === 'TI') minLen = 10;
+            
+            docNumberInput.minLength = minLen;
+            if (docHint) docHint.textContent = `Mínimo ${minLen} números. Solo dígitos.`;
+        });
+
+        docNumberInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '');
+        });
+    }
+
     if (registerForm) {
         registerForm.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -27,9 +47,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const address = document.getElementById('address').value.trim();
             const password = document.getElementById('password').value;
 
-            // Simple validación
+            // Simple validación de campos vacíos
             if (!docType || !docNumber || !names || !surnames || !gender || !phone || !email || !city || !address || !password) {
                 showToast('Todos los campos son obligatorios.', 'error');
+                return;
+            }
+
+            // Validar longitud de documento según tipo
+            let minDocLen = 8;
+            if (docType === 'CE') minDocLen = 6;
+            if (docType === 'TI') minDocLen = 10;
+
+            if (docNumber.length < minDocLen) {
+                showToast(`El número para ${docType} debe tener al menos ${minDocLen} dígitos.`, 'error');
+                return;
+            }
+
+            // Validar contraseña
+            const hasNumber = /\d/.test(password);
+            const hasLetter = /[a-zA-Z]/.test(password);
+
+            if (password.length < 7 || !hasNumber || !hasLetter) {
+                showToast('La contraseña debe tener al menos 7 caracteres e incluir letras y números.', 'error');
                 return;
             }
 

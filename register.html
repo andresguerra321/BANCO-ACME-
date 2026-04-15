@@ -31,7 +31,8 @@
                     </select>
                 </div>
                 <div class="input-modern">
-                    <input type="text" id="docNumber" placeholder="Número Identificación" required>
+                    <input type="text" id="docNumber" placeholder="Número Identificación" required minlength="8" pattern="\d*" inputmode="numeric">
+                    <small class="input-hint">Mínimo 8 números. Solo dígitos.</small>
                 </div>
                 <div class="input-modern">
                     <input type="text" id="names" placeholder="Nombres" required>
@@ -60,7 +61,8 @@
                     <input type="text" id="address" placeholder="Dirección" required>
                 </div>
                 <div class="input-modern full-width">
-                    <input type="password" id="password" placeholder="Crea una contraseña segura" required>
+                    <input type="password" id="password" placeholder="Crea una contraseña segura" required minlength="7">
+                    <small class="input-hint">Mínimo 7 caracteres, incluyendo letras y números.</small>
                 </div>
                 
                 <div class="form-actions full-width" style="margin-top: 1rem;">

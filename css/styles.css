@@ -777,6 +777,23 @@ input:focus, select:focus {
     background-size: 0.65em auto, 100%;
 }
 
+.input-hint {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.4rem;
+    margin-left: 0.2rem;
+    font-weight: 400;
+}
+
+.input-modern input:invalid:not(:placeholder-shown) {
+    border-color: var(--danger-color);
+}
+
+.input-modern input:invalid:not(:placeholder-shown) + .input-hint {
+    color: var(--danger-color);
+}
+
 .form-options {
     display: flex;
     justify-content: space-between;
