@@ -31,7 +31,7 @@
                     </select>
                 </div>
                 <div class="input-modern">
-                    <input type="text" id="docNumber" placeholder="Número de Documento" required>
+                    <input type="text" id="docNumber" placeholder="Número de Documento" required oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                 </div>
                 <div class="input-modern">
                     <input type="password" id="password" placeholder="Contraseña" required>

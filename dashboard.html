@@ -15,9 +15,11 @@
             <ul class="nav-links" id="mainNav">
                 <li><a href="#" data-target="resume" class="active">Resumen</a></li>
                 <li><a href="#" data-target="transactions">Transacciones</a></li>
+                <li><a href="#" data-target="transfer">Transferir</a></li>
                 <li><a href="#" data-target="deposit">Abonar</a></li>
                 <li><a href="#" data-target="withdraw">Retirar</a></li>
                 <li><a href="#" data-target="services">Servicios</a></li>
+                <li><a href="#" data-target="loans">Créditos</a></li>
                 <li><a href="#" data-target="certificate">Descargas</a></li>
             </ul>
             <div class="nav-user">
@@ -52,6 +54,25 @@
                     </div>
                 </div>
                 
+                <!-- Análisis de Flujo (Gráfica) -->
+                <div class="panel mt-4" style="margin-top: 2rem;">
+                    <div class="panel-header">
+                        <h3>Análisis de Flujo 📊</h3>
+                    </div>
+                    <div class="flow-chart-container" style="display: flex; align-items: flex-end; justify-content: space-around; height: 160px; padding: 1rem 0; margin-top: 1rem; border-bottom: 2px solid #e1e1e8;">
+                        <div class="bar-wrapper" style="text-align: center; width: 30%;">
+                            <div id="incomeBar" style="background-color: #34c759; border-radius: 8px 8px 0 0; width: 100%; height: 0%; transition: height 0.5s ease;"></div>
+                            <span style="display: block; margin-top: 0.5rem; font-size: 0.85rem; color: #6e6e73;">Ingresos</span>
+                            <strong id="incomeText" style="font-size: 0.9rem;">$0</strong>
+                        </div>
+                        <div class="bar-wrapper" style="text-align: center; width: 30%;">
+                            <div id="expenseBar" style="background-color: #ff3b30; border-radius: 8px 8px 0 0; width: 100%; height: 0%; transition: height 0.5s ease;"></div>
+                            <span style="display: block; margin-top: 0.5rem; font-size: 0.85rem; color: #6e6e73;">Egresos</span>
+                            <strong id="expenseText" style="font-size: 0.9rem;">$0</strong>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- NUEVO WIDGET DE TASAS (Temas 6, 7 y 10) -->
                 <div class="panel mt-4" style="margin-top: 2rem;">
                     <div class="panel-header">
@@ -84,6 +105,11 @@
                             <tbody id="transactionsTableBody"></tbody>
                         </table>
                     </div>
+                    <div class="pagination-controls" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding: 0.5rem;">
+                        <button id="prevPageBtn" class="btn-link" disabled>← Anterior</button>
+                        <span id="pageInfoText" style="font-size: 0.9rem; color: #6e6e73;">Página 1</span>
+                        <button id="nextPageBtn" class="btn-link" disabled>Siguiente →</button>
+                    </div>
                 </div>
             </section>
             <!-- View Depositar -->
@@ -114,6 +140,31 @@
                     </form>
                 </div>
             </section>
+            <!-- View Transferir -->
+            <section id="transfer" class="view-section">
+                <div class="panel center-panel">
+                    <h3>Transferencia Directa</h3>
+                    <p class="text-muted mb-4">Envía fondos a otra cuenta Acme al instante.</p>
+                    <div id="contactsContainer" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;"></div>
+                    <form id="transferForm" class="minimal-form">
+                        <div class="input-modern">
+                            <input type="text" id="targetAccount" placeholder="Nro. Cuenta Destino" required>
+                        </div>
+                        <div class="input-modern large-input">
+                            <input type="number" id="transferAmount" placeholder="0.00" min="1" required>
+                            <span>$</span>
+                        </div>
+                        <div class="form-options" style="margin-top: 1rem;">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="saveContact">
+                                <span class="checkmark"></span>
+                                Guardar como contacto
+                            </label>
+                        </div>
+                        <button type="submit" class="btn-premium full-w" style="margin-top: 1rem;">Enviar Fondos</button>
+                    </form>
+                </div>
+            </section>
             <!-- View Servicios -->
             <section id="services" class="view-section">
                 <div class="panel center-panel">
@@ -136,6 +187,34 @@
                             <input type="number" id="serviceAmount" placeholder="Aporte $" min="1" required>
                         </div>
                         <button type="submit" class="btn-premium full-w" style="margin-top: 1rem;">Aplicar y Descontar</button>
+                    </form>
+                </div>
+            </section>
+            <!-- View Créditos -->
+            <section id="loans" class="view-section">
+                <!-- Tarjetas de Préstamos Activos -->
+                <div id="activeLoansContainer" style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem;">
+                    <!-- Aquí se inyectarán las tarjetas dinámicamente -->
+                </div>
+
+                <div class="panel center-panel">
+                    <h3>Solicitud de Crédito</h3>
+                    <p class="text-muted mb-4">Aprobación sujeta a perfil de riesgo en tiempo real.</p>
+                    <form id="loanForm" class="minimal-form">
+                        <div class="input-modern large-input">
+                            <input type="number" id="loanAmount" placeholder="Monto a solicitar" min="50000" required>
+                            <span>$</span>
+                        </div>
+                        <div class="input-modern" style="margin-top: 1rem;">
+                            <select id="loanInstallments" required>
+                                <option value="" disabled selected>Plazo en cuotas</option>
+                                <option value="6">6 Meses</option>
+                                <option value="12">12 Meses</option>
+                                <option value="24">24 Meses</option>
+                                <option value="36">36 Meses</option>
+                            </select>
+                        </div>
+                        <button type="submit" id="loanSubmitBtn" class="btn-premium full-w" style="margin-top: 1rem; background-color: #007aff;">Evaluar Solicitud</button>
                     </form>
                 </div>
             </section>

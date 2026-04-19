@@ -27,6 +27,14 @@ export function getUserByDoc(docNumber) {
 }
 
 /**
+ * Busca un usuario por su número de cuenta.
+ */
+export function getUserByAccount(accountNumber) {
+    const users = getUsers();
+    return users.find(u => u.accountNumber === accountNumber) || null;
+}
+
+/**
  * Establece el usuario actualmente autenticado (ID/docNumber)
  */
 export function setCurrentUser(docNumber) {

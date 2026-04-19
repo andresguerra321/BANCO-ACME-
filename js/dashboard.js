@@ -1,7 +1,10 @@
-import { getCurrentUser, updateUser, logout, isAuthenticated } from './storage.js';
+import { getCurrentUser, updateUser, logout, isAuthenticated, getUserByAccount } from './storage.js';
 import { showToast, formatCurrency, formatDate, generateReference } from './ui.js';
 
 let currentUser = null;
+let currentTxPage = 1;
+const txPerPage = 5;
+let inactivityTimeout;
 
 document.addEventListener('DOMContentLoaded', () => {
     // Protección de ruta
@@ -22,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     setupForms();
     setupPrintFunctionality();
+    setupPagination();
+    setupInactivityTimer();
     
     // Ejecutar petición a API pública
     loadExchangeRates();
@@ -29,14 +34,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // TEMA 8: EVENTOS PERSONALIZADOS (CustomEvents)
     // ==========================================
-    // El Dashboard ahora "escucha" pacíficamente a que ocurra nuestro propio evento inventado,
-    // separando por completo la interfaz visual de la matemática de las transacciones.
     document.addEventListener('bancoAcme:nuevaTransaccion', (e) => {
         const transaccion = e.detail;
         console.log('✅ Se detectó una nueva transacción mediante CustomEvent:', transaccion);
         
-        // Solo cuando escuchamos el evento actualizamos la pantalla automáticamente
         updateResumeView();
+        updateFlowChartView();
         updateTransactionsView();
     });
 });
@@ -56,8 +59,11 @@ function initUI() {
 
     // Update specific views
     updateResumeView();
+    updateFlowChartView();
     updateTransactionsView();
     updateCertificateView();
+    renderContacts();
+    renderActiveLoans();
 }
 
 function updateResumeView() {
@@ -70,30 +76,44 @@ function updateTransactionsView() {
     const tbody = document.getElementById('transactionsTableBody');
     tbody.innerHTML = '';
 
-    // Tomar las últimas 10 transacciones
-    const recentTx = [...currentUser.transactions].reverse().slice(0, 10);
+    const allTx = [...currentUser.transactions].reverse();
+    const totalPages = Math.ceil(allTx.length / txPerPage) || 1;
+    
+    if (currentTxPage > totalPages) currentTxPage = totalPages;
+    if (currentTxPage < 1) currentTxPage = 1;
 
-    if (recentTx.length === 0) {
+    const start = (currentTxPage - 1) * txPerPage;
+    const end = start + txPerPage;
+    const paginatedTx = allTx.slice(start, end);
+
+    if (paginatedTx.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center">No hay transacciones registradas</td></tr>';
-        return;
+    } else {
+        paginatedTx.forEach(tx => {
+            const isPositive = tx.type === 'Consignación';
+            const valClass = isPositive ? 'val-positive' : 'val-negative';
+            const typeClass = isPositive ? 'type-consignacion' : 'type-retiro';
+            const operator = isPositive ? '+' : '-';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${formatDate(tx.date)}</td>
+                <td>${tx.reference}</td>
+                <td><span class="type-badge ${typeClass}">${tx.type}</span></td>
+                <td>${tx.concept}</td>
+                <td class="${valClass} text-right">${operator} ${formatCurrency(tx.value)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
     }
 
-    recentTx.forEach(tx => {
-        const isPositive = tx.type === 'Consignación';
-        const valClass = isPositive ? 'val-positive' : 'val-negative';
-        const typeClass = isPositive ? 'type-consignacion' : 'type-retiro';
-        const operator = isPositive ? '+' : '-';
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    const pageInfo = document.getElementById('pageInfoText');
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${formatDate(tx.date)}</td>
-            <td>${tx.reference}</td>
-            <td><span class="type-badge ${typeClass}">${tx.type}</span></td>
-            <td>${tx.concept}</td>
-            <td class="${valClass} text-right">${operator} ${formatCurrency(tx.value)}</td>
-        `;
-        tbody.appendChild(tr);
-    });
+    if (prevBtn) prevBtn.disabled = currentTxPage === 1;
+    if (nextBtn) nextBtn.disabled = currentTxPage === totalPages;
+    if (pageInfo) pageInfo.textContent = `Página ${currentTxPage} de ${totalPages}`;
 }
 
 function updateCertificateView() {
@@ -205,6 +225,123 @@ function setupForms() {
         });
     }
 
+    // Transfer Form
+    const transferForm = document.getElementById('transferForm');
+    if (transferForm) {
+        transferForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const targetAccount = document.getElementById('targetAccount').value.trim();
+            const amount = parseFloat(document.getElementById('transferAmount').value);
+            
+            if (!targetAccount || amount <= 0) {
+                showToast('Por favor, complete correctamente el formulario', 'error');
+                return;
+            }
+
+            if (targetAccount === currentUser.accountNumber) {
+                showToast('No puedes transferir dinero a tu propia cuenta', 'error');
+                return;
+            }
+
+            if (amount > currentUser.balance) {
+                showToast('Saldo insuficiente para esta transferencia', 'error');
+                return;
+            }
+
+            const targetUser = getUserByAccount(targetAccount);
+            if (!targetUser) {
+                showToast('La cuenta destino no existe en Banco Acme', 'error');
+                return;
+            }
+
+            // 1. Registrar retiro del usuario actual usando el sistema del dashboard (actualiza DOM y localStorage)
+            const txCurrent = registerTransaction('Retiro', `Trf. enviada a Cta: ${targetAccount}`, amount);
+            
+            // 2. Sumar al usuario destino y guardar su registro en localStorage
+            const txTarget = {
+                date: new Date().toISOString(),
+                reference: txCurrent.reference, // Comparten la misma referencia de la operación
+                type: 'Consignación',
+                concept: `Trf. recibida de Cta: ${currentUser.accountNumber}`,
+                value: amount
+            };
+            targetUser.balance += amount;
+            targetUser.transactions.push(txTarget);
+            updateUser(targetUser); // Actualizamos el usuario destino silenciosamente
+
+            // Lógica de Contactos Frecuentes
+            const saveContactCheckbox = document.getElementById('saveContact');
+            if (saveContactCheckbox && saveContactCheckbox.checked) {
+                currentUser.contacts = currentUser.contacts || [];
+                const exists = currentUser.contacts.find(c => c.account === targetAccount);
+                if (!exists) {
+                    currentUser.contacts.push({ 
+                        account: targetAccount, 
+                        name: `${targetUser.names} ${targetUser.surnames}` 
+                    });
+                    updateUser(currentUser);
+                    renderContacts();
+                }
+            }
+
+            showToast('Transferencia exitosa', 'success');
+            transferForm.reset();
+            showPrintModalForTransaction(txCurrent);
+        });
+    }
+
+    // Loan Form (Asincronía)
+    const loanForm = document.getElementById('loanForm');
+    if (loanForm) {
+        loanForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('loanAmount').value);
+            const installments = document.getElementById('loanInstallments').value;
+            const submitBtn = document.getElementById('loanSubmitBtn');
+            
+            if (!amount || !installments || amount < 50000) {
+                showToast('El monto mínimo es de $50,000', 'error');
+                return;
+            }
+
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = 'Analizando perfil crediticio... ⏳';
+            submitBtn.disabled = true;
+
+            try {
+                // AWAIT: Detenemos la ejecución esperando a "Datacrédito"
+                await simularAnalisisCredito(amount);
+                
+                // Si llegamos aquí, la Promesa hizo resolve()
+                currentUser.loans = currentUser.loans || [];
+                currentUser.loans.push({
+                    id: `CR-${Math.floor(Math.random() * 90000) + 10000}`,
+                    amount: amount,
+                    installments: parseInt(installments),
+                    remaining: amount,
+                    date: new Date().toISOString(),
+                    status: 'Activo'
+                });
+                
+                // Reutilizamos nuestra arquitectura existente para registrar el ingreso del dinero
+                const tx = registerTransaction('Consignación', `Desembolso Crédito Aprobado a ${installments} meses`, amount);
+                
+                renderActiveLoans();
+                showToast('¡Crédito Aprobado y Desembolsado!', 'success');
+                loanForm.reset();
+                showPrintModalForTransaction(tx);
+                
+            } catch (error) {
+                // Si llegamos aquí, la Promesa hizo reject()
+                showToast('Lo sentimos, solicitud rechazada por riesgo', 'error');
+            } finally {
+                // Pase lo que pase, restauramos el botón
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+    }
+
     // Services Form
     const servicesForm = document.getElementById('servicesForm');
     if (servicesForm) {
@@ -249,9 +386,11 @@ function setupNavigation() {
     const titles = {
         'resume': 'Resumen de Cuenta',
         'transactions': 'Historial de Transacciones',
+        'transfer': 'Transferencia Directa',
         'deposit': 'Consignación Electrónica',
         'withdraw': 'Retiro de Dinero',
         'services': 'Pago de Servicios',
+        'loans': 'Centro de Créditos',
         'certificate': 'Certificado Bancario'
     };
 
@@ -416,3 +555,157 @@ async function loadExchangeRates() {
         status.className = 'type-badge type-retiro';
     }
 }
+
+// ==========================================
+// NUEVAS FUNCIONALIDADES AVANZADAS
+// ==========================================
+
+function setupInactivityTimer() {
+    const resetTimer = () => {
+        clearTimeout(inactivityTimeout);
+        inactivityTimeout = setTimeout(() => {
+            logout();
+            window.location.href = 'index.html';
+        }, 2 * 60 * 1000); // 2 minutos
+    };
+
+    document.addEventListener('mousemove', resetTimer);
+    document.addEventListener('keydown', resetTimer);
+    document.addEventListener('click', resetTimer);
+    
+    resetTimer(); // Iniciar
+}
+
+function updateFlowChartView() {
+    if (!currentUser) return;
+    
+    let totalIncome = 0;
+    let totalExpense = 0;
+
+    currentUser.transactions.forEach(tx => {
+        if (tx.type === 'Consignación') totalIncome += tx.value;
+        else totalExpense += tx.value;
+    });
+
+    const max = Math.max(totalIncome, totalExpense);
+    
+    const incomeBar = document.getElementById('incomeBar');
+    const expenseBar = document.getElementById('expenseBar');
+    const incomeText = document.getElementById('incomeText');
+    const expenseText = document.getElementById('expenseText');
+
+    if (max === 0) {
+        if (incomeBar) incomeBar.style.height = '0%';
+        if (expenseBar) expenseBar.style.height = '0%';
+    } else {
+        const incomePercent = (totalIncome / max) * 100;
+        const expensePercent = (totalExpense / max) * 100;
+        
+        if (incomeBar) incomeBar.style.height = `${incomePercent}%`;
+        if (expenseBar) expenseBar.style.height = `${expensePercent}%`;
+    }
+
+    if (incomeText) incomeText.textContent = formatCurrency(totalIncome);
+    if (expenseText) expenseText.textContent = formatCurrency(totalExpense);
+}
+
+function setupPagination() {
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            if (currentTxPage > 1) {
+                currentTxPage--;
+                updateTransactionsView();
+            }
+        });
+    }
+    
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            currentTxPage++;
+            updateTransactionsView();
+        });
+    }
+}
+
+function renderContacts() {
+    const container = document.getElementById('contactsContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (!currentUser.contacts || currentUser.contacts.length === 0) {
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    currentUser.contacts.forEach(contact => {
+        const badge = document.createElement('div');
+        badge.className = 'type-badge type-consignacion';
+        badge.style.cursor = 'pointer';
+        badge.style.padding = '0.5rem 1rem';
+        badge.style.borderRadius = '980px';
+        badge.textContent = `${contact.name}`;
+        badge.title = contact.account;
+        
+        badge.addEventListener('click', () => {
+            const targetInput = document.getElementById('targetAccount');
+            if (targetInput) targetInput.value = contact.account;
+        });
+        
+        fragment.appendChild(badge);
+    });
+    
+    container.appendChild(fragment);
+}
+
+function simularAnalisisCredito(monto) {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            // 70% de probabilidad de aprobación
+            if (Math.random() > 0.3) {
+                resolve({ aprobado: true, monto });
+            } else {
+                reject(new Error('Perfil de riesgo alto'));
+            }
+        }, 3000); // Tarda 3 segundos
+    });
+}
+
+function renderActiveLoans() {
+    const container = document.getElementById('activeLoansContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (!currentUser.loans || currentUser.loans.length === 0) {
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    currentUser.loans.forEach(loan => {
+        const card = document.createElement('div');
+        card.classList.add('panel');
+        card.style.flex = '1';
+        card.style.minWidth = '250px';
+        card.style.borderTop = '4px solid #ff3b30'; // Línea roja de deuda
+        card.style.padding = '1.5rem';
+        
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span class="type-badge type-retiro" style="font-size: 0.75rem;">${loan.status}</span>
+                <span style="font-size: 0.8rem; color: #6e6e73;">${loan.id}</span>
+            </div>
+            <h4 style="margin: 0.5rem 0; font-size: 1.1rem; color: #1d1d1f;">Deuda Actual</h4>
+            <strong style="font-size: 1.5rem; color: #ff3b30; display: block;">${formatCurrency(loan.remaining)}</strong>
+            <p style="font-size: 0.85rem; color: #6e6e73; margin-top: 0.8rem;">Préstamo original: <br><strong>${formatCurrency(loan.amount)}</strong> a ${loan.installments} cuotas</p>
+        `;
+        
+        fragment.appendChild(card);
+    });
+    
+    container.appendChild(fragment);
+}
+

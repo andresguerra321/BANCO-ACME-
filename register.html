@@ -35,10 +35,10 @@
                     <small class="input-hint">Mínimo 8 números. Solo dígitos.</small>
                 </div>
                 <div class="input-modern">
-                    <input type="text" id="names" placeholder="Nombres" required>
+                    <input type="text" id="names" placeholder="Nombres" required oninput="this.value = this.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')">
                 </div>
                 <div class="input-modern">
-                    <input type="text" id="surnames" placeholder="Apellidos" required>
+                    <input type="text" id="surnames" placeholder="Apellidos" required oninput="this.value = this.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')">
                 </div>
                 <div class="input-modern">
                     <select id="gender" required>
@@ -49,7 +49,7 @@
                     </select>
                 </div>
                 <div class="input-modern">
-                    <input type="tel" id="phone" placeholder="Teléfono Móvil" required>
+                    <input type="tel" id="phone" placeholder="Teléfono Móvil" required oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                 </div>
                 <div class="input-modern full-width">
                     <input type="email" id="email" placeholder="Correo Electrónico" required>
