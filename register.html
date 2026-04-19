@@ -55,10 +55,10 @@
                     <input type="email" id="email" placeholder="Correo Electrónico" required>
                 </div>
                 <div class="input-modern">
-                    <input type="text" id="city" placeholder="Ciudad" required>
+                    <input type="text" id="city" placeholder="Ciudad" required oninput="this.value = this.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')">
                 </div>
                 <div class="input-modern">
-                    <input type="text" id="address" placeholder="Dirección" required>
+                    <input type="text" id="address" placeholder="Dirección" required pattern=".*[a-zA-ZáéíóúÁÉÍÓÚñÑ].*" title="La dirección debe contener al menos una letra">
                 </div>
                 <div class="input-modern full-width">
                     <input type="password" id="password" placeholder="Crea una contraseña segura" required minlength="7">

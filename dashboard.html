@@ -249,11 +249,26 @@
             <button class="close-modal" id="closePrintModal">&times;</button>
             <div id="printVoucherArea" class="printable voucher-area">
                 <div class="voucher-logo">BA</div>
-                <h3 style="font-weight: 500; font-size:1.1rem; margin-bottom: 1.5rem; letter-spacing: -0.02em;">Acuse de Operación Bancaria</h3>
+                <h3 style="color: #1d1d1f; font-weight: 500; font-size:1.1rem; margin-bottom: 1.5rem; letter-spacing: -0.02em;">Acuse de Operación Bancaria</h3>
                 <div id="voucherDetails" class="voucher-details"></div>
             </div>
             <div class="modal-actions hide-on-print">
                 <button id="printVoucherBtn" class="btn-premium full-w" style="border-radius: 980px;">Expedir Archivo Físico</button>
+            </div>
+        </div>
+    </div>
+    <!-- Confirm Transfer Modal -->
+    <div id="transferConfirmModal" class="apple-modal modal">
+        <div class="modal-card" style="text-align: center;">
+            <button class="close-modal" id="closeTransferModal">&times;</button>
+            <div style="padding: 2rem;">
+                <div class="logo-icon" style="margin: 0 auto 1.5rem; width:50px; height:50px; display:flex; align-items:center; justify-content:center; background:#ff9500; color:#fff; font-weight:800; font-size:1.5rem; border-radius:50%;">?</div>
+                <h3 style="margin-bottom: 1rem; color: #1d1d1f;">Confirmar Transferencia</h3>
+                <p style="color: #6e6e73; margin-bottom: 1.5rem; font-size: 0.95rem;">Estás a punto de enviar <strong style="color:#1d1d1f; font-size:1.1rem;" id="confirmAmountText"></strong> a la cuenta de <strong style="color:#1d1d1f;" id="confirmNameText"></strong>.</p>
+                <div style="display: flex; gap: 1rem;">
+                    <button id="cancelTransferBtn" class="btn-secondary full-w" style="border-radius: 980px;">Cancelar</button>
+                    <button id="confirmTransferBtn" class="btn-premium full-w" style="border-radius: 980px; background-color: #34c759;">Sí, Transferir</button>
+                </div>
             </div>
         </div>
     </div>

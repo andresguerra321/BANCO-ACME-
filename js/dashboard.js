@@ -166,14 +166,14 @@ function showPrintModalForTransaction(tx) {
     
     const detailsDiv = document.getElementById('voucherDetails');
     detailsDiv.innerHTML = `
-        <p><span>Fecha:</span> <strong>${formatDate(tx.date)}</strong></p>
-        <p><span>Referencia:</span> <strong>${tx.reference}</strong></p>
-        <p><span>Tipo:</span> <strong>${tx.type}</strong></p>
-        <p><span>Concepto:</span> <strong style="max-width:200px; text-align:right;">${tx.concept}</strong></p>
-        <p><span>Valor Final:</span> <strong style="font-size: 1.25rem;">${operator} ${formatCurrency(tx.value)}</strong></p>
+        <p><span>Fecha:</span> <strong style="color: #1d1d1f;">${formatDate(tx.date)}</strong></p>
+        <p><span>Referencia:</span> <strong style="color: #1d1d1f;">${tx.reference}</strong></p>
+        <p><span>Tipo:</span> <strong style="color: #1d1d1f;">${tx.type}</strong></p>
+        <p><span>Concepto:</span> <strong style="max-width:200px; text-align:right; color: #1d1d1f;">${tx.concept}</strong></p>
+        <p><span>Valor Final:</span> <strong style="font-size: 1.25rem; color: #1d1d1f;">${operator} ${formatCurrency(tx.value)}</strong></p>
         <p style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #d2d2d7; flex-direction:column; align-items:center; ">
             <span style="font-size:0.8rem; margin-bottom:5px;">Responsable Titular:</span>
-            <strong>${currentUser.names} ${currentUser.surnames}</strong>
+            <strong style="color: #1d1d1f;">${currentUser.names} ${currentUser.surnames}</strong>
         </p>
     `;
     
@@ -230,7 +230,10 @@ function setupForms() {
     if (transferForm) {
         transferForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            const targetAccount = document.getElementById('targetAccount').value.trim();
+            let targetAccount = document.getElementById('targetAccount').value.trim().toUpperCase();
+            if (targetAccount && !targetAccount.startsWith('ACME-')) {
+                targetAccount = 'ACME-' + targetAccount;
+            }
             const amount = parseFloat(document.getElementById('transferAmount').value);
             
             if (!targetAccount || amount <= 0) {
@@ -254,39 +257,64 @@ function setupForms() {
                 return;
             }
 
-            // 1. Registrar retiro del usuario actual usando el sistema del dashboard (actualiza DOM y localStorage)
-            const txCurrent = registerTransaction('Retiro', `Trf. enviada a Cta: ${targetAccount}`, amount);
+            // --- LÓGICA DE CONFIRMACIÓN (SIMULACIÓN REALISTA) ---
+            const confirmModal = document.getElementById('transferConfirmModal');
+            document.getElementById('confirmAmountText').innerText = formatCurrency(amount);
+            document.getElementById('confirmNameText').innerText = `${targetUser.names} ${targetUser.surnames}`;
             
-            // 2. Sumar al usuario destino y guardar su registro en localStorage
-            const txTarget = {
-                date: new Date().toISOString(),
-                reference: txCurrent.reference, // Comparten la misma referencia de la operación
-                type: 'Consignación',
-                concept: `Trf. recibida de Cta: ${currentUser.accountNumber}`,
-                value: amount
+            confirmModal.classList.add('active');
+
+            const confirmBtn = document.getElementById('confirmTransferBtn');
+            const cancelBtn = document.getElementById('cancelTransferBtn');
+            const closeBtn = document.getElementById('closeTransferModal');
+
+            const cleanupModal = () => {
+                confirmModal.classList.remove('active');
+                confirmBtn.onclick = null;
+                cancelBtn.onclick = null;
+                closeBtn.onclick = null;
             };
-            targetUser.balance += amount;
-            targetUser.transactions.push(txTarget);
-            updateUser(targetUser); // Actualizamos el usuario destino silenciosamente
 
-            // Lógica de Contactos Frecuentes
-            const saveContactCheckbox = document.getElementById('saveContact');
-            if (saveContactCheckbox && saveContactCheckbox.checked) {
-                currentUser.contacts = currentUser.contacts || [];
-                const exists = currentUser.contacts.find(c => c.account === targetAccount);
-                if (!exists) {
-                    currentUser.contacts.push({ 
-                        account: targetAccount, 
-                        name: `${targetUser.names} ${targetUser.surnames}` 
-                    });
-                    updateUser(currentUser);
-                    renderContacts();
+            cancelBtn.onclick = cleanupModal;
+            closeBtn.onclick = cleanupModal;
+
+            confirmBtn.onclick = () => {
+                cleanupModal(); // Cerramos el modal primero
+
+                // 1. Registrar retiro del usuario actual usando el sistema del dashboard
+                const txCurrent = registerTransaction('Retiro', `Trf. enviada a Cta: ${targetAccount}`, amount);
+                
+                // 2. Sumar al usuario destino y guardar su registro en localStorage
+                const txTarget = {
+                    date: new Date().toISOString(),
+                    reference: txCurrent.reference,
+                    type: 'Consignación',
+                    concept: `Trf. recibida de Cta: ${currentUser.accountNumber}`,
+                    value: amount
+                };
+                targetUser.balance += amount;
+                targetUser.transactions.push(txTarget);
+                updateUser(targetUser); // Actualizamos el usuario destino silenciosamente
+
+                // Lógica de Contactos Frecuentes
+                const saveContactCheckbox = document.getElementById('saveContact');
+                if (saveContactCheckbox && saveContactCheckbox.checked) {
+                    currentUser.contacts = currentUser.contacts || [];
+                    const exists = currentUser.contacts.find(c => c.account === targetAccount);
+                    if (!exists) {
+                        currentUser.contacts.push({ 
+                            account: targetAccount, 
+                            name: `${targetUser.names} ${targetUser.surnames}` 
+                        });
+                        updateUser(currentUser);
+                        renderContacts();
+                    }
                 }
-            }
 
-            showToast('Transferencia exitosa', 'success');
-            transferForm.reset();
-            showPrintModalForTransaction(txCurrent);
+                showToast('Transferencia exitosa', 'success');
+                transferForm.reset();
+                showPrintModalForTransaction(txCurrent);
+            };
         });
     }
 
