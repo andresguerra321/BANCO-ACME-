@@ -33,7 +33,7 @@ export function initDynamicToken(containerId) {
     container.innerHTML = `
         <div class="token-widget panel center-panel" style="margin-bottom: 2rem; background: rgba(0, 113, 227, 0.05); border: 1px solid rgba(0, 113, 227, 0.2);">
             <p class="text-muted mb-2" style="font-weight: 500;">Tu Clave Dinámica 2FA</p>
-            <h2 id="dynamicTokenDisplay" class="token-value" style="font-size: 2.5rem; letter-spacing: 0.2em; font-family: monospace; color: var(--text-color); margin: 0.5rem 0; transition: opacity 0.2s ease;">------</h2>
+            <h2 id="dynamicTokenDisplay" class="token-value" style="font-size: 2.5rem; letter-spacing: 0.2em; font-family: monospace; color: #ffffff; margin: 0.5rem 0; transition: opacity 0.2s ease;">------</h2>
             <div class="token-progress-container" style="background: rgba(0,0,0,0.1); height: 6px; border-radius: 10px; overflow: hidden; margin-top: 1rem;">
                 <div id="tokenProgressBar" class="token-progress-bar" style="height: 100%; background: var(--primary-color); transition: width 1s linear, background-color 0.3s ease;"></div>
             </div>
