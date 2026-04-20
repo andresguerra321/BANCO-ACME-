@@ -1,13 +1,9 @@
-import { getCurrentUser, updateUser, logout, isAuthenticated, getUserByAccount } from './storage.js';
+import { getCurrentUser, updateUser, logout, isAuthenticated, getSavingsGoals, saveSavingsGoals } from './storage.js';
 import { showToast, formatCurrency, formatDate, generateReference } from './ui.js';
 
 let currentUser = null;
-let currentTxPage = 1;
-const txPerPage = 5;
-let inactivityTimeout;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Protección de ruta
     if (!isAuthenticated()) {
         window.location.href = 'index.html';
         return;
@@ -20,50 +16,39 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // Inicializar UI
     initUI();
     setupNavigation();
     setupForms();
     setupPrintFunctionality();
-    setupPagination();
-    setupInactivityTimer();
-    
-    // Ejecutar petición a API pública
-    loadExchangeRates();
+    loadExchangeRatesWithWorker();
 
-    // ==========================================
-    // TEMA 8: EVENTOS PERSONALIZADOS (CustomEvents)
-    // ==========================================
+    // TEMA 8: Escuchamos el CustomEvent de nueva transacción
     document.addEventListener('bancoAcme:nuevaTransaccion', (e) => {
-        const transaccion = e.detail;
-        console.log('✅ Se detectó una nueva transacción mediante CustomEvent:', transaccion);
-        
+        console.log('✅ Nueva transacción detectada via CustomEvent:', e.detail);
         updateResumeView();
-        updateFlowChartView();
         updateTransactionsView();
     });
 });
 
+// ============================================================
+// UI BASE
+// ============================================================
+
 function initUI() {
     const fullName = `${currentUser.names} ${currentUser.surnames}`;
-    
-    // Header Info
+
     document.getElementById('userNameDisplay').textContent = currentUser.names;
     document.getElementById('userAvatar').textContent = currentUser.names.charAt(0).toUpperCase();
 
-    // Labels account info in multiple tabs
-    const accLabels = document.querySelectorAll('.acc-num-label');
-    accLabels.forEach(el => el.textContent = currentUser.accountNumber);
-    const accNames = document.querySelectorAll('.acc-name-label');
-    accNames.forEach(el => el.textContent = fullName);
+    document.querySelectorAll('.acc-num-label').forEach(el => el.textContent = currentUser.accountNumber);
+    document.querySelectorAll('.acc-name-label').forEach(el => el.textContent = fullName);
 
-    // Update specific views
     updateResumeView();
-    updateFlowChartView();
     updateTransactionsView();
     updateCertificateView();
-    renderContacts();
-    renderActiveLoans();
+
+    // FUNCIONALIDAD 4: Pedimos permiso de notificaciones al cargar
+    requestNotificationPermission();
 }
 
 function updateResumeView() {
@@ -76,44 +61,27 @@ function updateTransactionsView() {
     const tbody = document.getElementById('transactionsTableBody');
     tbody.innerHTML = '';
 
-    const allTx = [...currentUser.transactions].reverse();
-    const totalPages = Math.ceil(allTx.length / txPerPage) || 1;
-    
-    if (currentTxPage > totalPages) currentTxPage = totalPages;
-    if (currentTxPage < 1) currentTxPage = 1;
+    const recentTx = [...currentUser.transactions].reverse().slice(0, 10);
 
-    const start = (currentTxPage - 1) * txPerPage;
-    const end = start + txPerPage;
-    const paginatedTx = allTx.slice(start, end);
-
-    if (paginatedTx.length === 0) {
+    if (recentTx.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center">No hay transacciones registradas</td></tr>';
-    } else {
-        paginatedTx.forEach(tx => {
-            const isPositive = tx.type === 'Consignación';
-            const valClass = isPositive ? 'val-positive' : 'val-negative';
-            const typeClass = isPositive ? 'type-consignacion' : 'type-retiro';
-            const operator = isPositive ? '+' : '-';
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${formatDate(tx.date)}</td>
-                <td>${tx.reference}</td>
-                <td><span class="type-badge ${typeClass}">${tx.type}</span></td>
-                <td>${tx.concept}</td>
-                <td class="${valClass} text-right">${operator} ${formatCurrency(tx.value)}</td>
-            `;
-            tbody.appendChild(tr);
-        });
+        return;
     }
 
-    const prevBtn = document.getElementById('prevPageBtn');
-    const nextBtn = document.getElementById('nextPageBtn');
-    const pageInfo = document.getElementById('pageInfoText');
-
-    if (prevBtn) prevBtn.disabled = currentTxPage === 1;
-    if (nextBtn) nextBtn.disabled = currentTxPage === totalPages;
-    if (pageInfo) pageInfo.textContent = `Página ${currentTxPage} de ${totalPages}`;
+    recentTx.forEach(tx => {
+        const isPositive = tx.type === 'Consignación';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${formatDate(tx.date)}</td>
+            <td>${tx.reference}</td>
+            <td><span class="type-badge ${isPositive ? 'type-consignacion' : 'type-retiro'}">${tx.type}</span></td>
+            <td>${tx.concept}</td>
+            <td class="${isPositive ? 'val-positive' : 'val-negative'} text-right">
+                ${isPositive ? '+' : '-'} ${formatCurrency(tx.value)}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
 function updateCertificateView() {
@@ -124,6 +92,10 @@ function updateCertificateView() {
     document.getElementById('certDate').textContent = new Date(currentUser.creationDate).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
     document.getElementById('certToday').textContent = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
 }
+
+// ============================================================
+// TRANSACCIONES BASE
+// ============================================================
 
 function registerTransaction(type, concept, value) {
     const transaction = {
@@ -142,269 +114,113 @@ function registerTransaction(type, concept, value) {
 
     currentUser.transactions.push(transaction);
     updateUser(currentUser);
-    
-    // ==========================================
-    // TEMA 8: Despachando nuestro CustomEvent
-    // ==========================================
-    // Ya NO llamamos a updateResumeView() ni updateTransactionsView() directamente, 
-    // previniendo código enredado o redundancia.
-    
-    // Empaquetamos la variable 'transaction' en el objeto 'detail'
-    const eventoDinamico = new CustomEvent('bancoAcme:nuevaTransaccion', { 
-        detail: transaction 
-    });
-    
-    // Disparamos nuestro propio evento a todo el documento
-    document.dispatchEvent(eventoDinamico);
-    
+
+    // FUNCIONALIDAD 4: Notificación del sistema
+    notificarTransaccion(
+        type === 'Consignación' ? 'Consignación registrada' : 'Retiro registrado',
+        `${concept} — ${formatCurrency(transaction.value)}`,
+        type === 'Consignación' ? 'consignacion' : 'retiro'
+    );
+
+    // TEMA 8: Disparamos el CustomEvent
+    document.dispatchEvent(new CustomEvent('bancoAcme:nuevaTransaccion', { detail: transaction }));
+
     return transaction;
 }
 
 function showPrintModalForTransaction(tx) {
     const isPositive = tx.type === 'Consignación';
     const operator = isPositive ? '+' : '-';
-    
-    const detailsDiv = document.getElementById('voucherDetails');
-    detailsDiv.innerHTML = `
-        <p><span>Fecha:</span> <strong style="color: #1d1d1f;">${formatDate(tx.date)}</strong></p>
-        <p><span>Referencia:</span> <strong style="color: #1d1d1f;">${tx.reference}</strong></p>
-        <p><span>Tipo:</span> <strong style="color: #1d1d1f;">${tx.type}</strong></p>
-        <p><span>Concepto:</span> <strong style="max-width:200px; text-align:right; color: #1d1d1f;">${tx.concept}</strong></p>
-        <p><span>Valor Final:</span> <strong style="font-size: 1.25rem; color: #1d1d1f;">${operator} ${formatCurrency(tx.value)}</strong></p>
-        <p style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #d2d2d7; flex-direction:column; align-items:center; ">
+
+    document.getElementById('voucherDetails').innerHTML = `
+        <p><span>Fecha:</span> <strong>${formatDate(tx.date)}</strong></p>
+        <p><span>Referencia:</span> <strong>${tx.reference}</strong></p>
+        <p><span>Tipo:</span> <strong>${tx.type}</strong></p>
+        <p><span>Concepto:</span> <strong style="max-width:200px; text-align:right;">${tx.concept}</strong></p>
+        <p><span>Valor Final:</span> <strong style="font-size:1.25rem;">${operator} ${formatCurrency(tx.value)}</strong></p>
+        <p style="margin-top:1.5rem; padding-top:1rem; border-top:1px dashed #d2d2d7; flex-direction:column; align-items:center;">
             <span style="font-size:0.8rem; margin-bottom:5px;">Responsable Titular:</span>
-            <strong style="color: #1d1d1f;">${currentUser.names} ${currentUser.surnames}</strong>
+            <strong>${currentUser.names} ${currentUser.surnames}</strong>
         </p>
     `;
-    
-    const modal = document.getElementById('printModal');
-    modal.classList.add('active');
+
+    document.getElementById('printModal').classList.add('active');
 }
+
+// ============================================================
+// FORMULARIOS
+// ============================================================
 
 function setupForms() {
-    // Deposit Form
-    const depositForm = document.getElementById('depositForm');
-    if (depositForm) {
-        depositForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const amount = document.getElementById('depositAmount').value;
-            
-            if (amount <= 0) {
-                showToast('Ingrese un valor válido mayor a 0', 'error');
-                return;
-            }
+    // Depósito
+    document.getElementById('depositForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const amount = document.getElementById('depositAmount').value;
+        if (amount <= 0) { showToast('Ingrese un valor válido mayor a 0', 'error'); return; }
+        const tx = registerTransaction('Consignación', 'Consignación por canal electrónico', amount);
+        showToast('Consignación exitosa', 'success');
+        e.target.reset();
+        showPrintModalForTransaction(tx);
+    });
 
-            const tx = registerTransaction('Consignación', 'Consignación por canal electrónico', amount);
-            showToast('Consignación exitosa', 'success');
-            depositForm.reset();
-            showPrintModalForTransaction(tx);
-        });
-    }
+    // Retiro
+    document.getElementById('withdrawForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const amount = parseFloat(document.getElementById('withdrawAmount').value);
+        if (amount <= 0) { showToast('Ingrese un valor válido mayor a 0', 'error'); return; }
+        if (amount > currentUser.balance) { showToast('Saldo insuficiente', 'error'); return; }
+        const tx = registerTransaction('Retiro', 'Retiro de dinero', amount);
+        showToast('Retiro exitoso', 'success');
+        e.target.reset();
+        showPrintModalForTransaction(tx);
+    });
 
-    // Withdraw Form
-    const withdrawForm = document.getElementById('withdrawForm');
-    if (withdrawForm) {
-        withdrawForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const amount = parseFloat(document.getElementById('withdrawAmount').value);
-            
-            if (amount <= 0) {
-                showToast('Ingrese un valor válido mayor a 0', 'error');
-                return;
-            }
+    // Servicios
+    document.getElementById('servicesForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const serviceType = document.getElementById('serviceType').value;
+        const ref = document.getElementById('serviceRef').value;
+        const amount = parseFloat(document.getElementById('serviceAmount').value);
+        if (!serviceType || !ref || amount <= 0) { showToast('Complete el formulario correctamente', 'error'); return; }
+        if (amount > currentUser.balance) { showToast('Saldo insuficiente', 'error'); return; }
+        const tx = registerTransaction('Retiro', `Pago de servicio público ${serviceType} (Ref: ${ref})`, amount);
+        showToast('Pago de servicio exitoso', 'success');
+        e.target.reset();
+        showPrintModalForTransaction(tx);
+    });
 
-            if (amount > currentUser.balance) {
-                showToast('Saldo insuficiente', 'error');
-                return;
-            }
+    // ----------------------
+    // FUNCIONALIDAD 2: Transferencias
+    // ----------------------
+    document.getElementById('transferForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const cuenta = document.getElementById('transferAccount').value.trim();
+        const monto = parseFloat(document.getElementById('transferAmount').value);
+        realizarTransferencia(cuenta, monto);
+        e.target.reset();
+    });
 
-            const tx = registerTransaction('Retiro', 'Retiro de dinero', amount);
-            showToast('Retiro exitoso', 'success');
-            withdrawForm.reset();
-            showPrintModalForTransaction(tx);
-        });
-    }
-
-    // Transfer Form
-    const transferForm = document.getElementById('transferForm');
-    if (transferForm) {
-        transferForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            let targetAccount = document.getElementById('targetAccount').value.trim().toUpperCase();
-            if (targetAccount && !targetAccount.startsWith('ACME-')) {
-                targetAccount = 'ACME-' + targetAccount;
-            }
-            const amount = parseFloat(document.getElementById('transferAmount').value);
-            
-            if (!targetAccount || amount <= 0) {
-                showToast('Por favor, complete correctamente el formulario', 'error');
-                return;
-            }
-
-            if (targetAccount === currentUser.accountNumber) {
-                showToast('No puedes transferir dinero a tu propia cuenta', 'error');
-                return;
-            }
-
-            if (amount > currentUser.balance) {
-                showToast('Saldo insuficiente para esta transferencia', 'error');
-                return;
-            }
-
-            const targetUser = getUserByAccount(targetAccount);
-            if (!targetUser) {
-                showToast('La cuenta destino no existe en Banco Acme', 'error');
-                return;
-            }
-
-            // --- LÓGICA DE CONFIRMACIÓN (SIMULACIÓN REALISTA) ---
-            const confirmModal = document.getElementById('transferConfirmModal');
-            document.getElementById('confirmAmountText').innerText = formatCurrency(amount);
-            document.getElementById('confirmNameText').innerText = `${targetUser.names} ${targetUser.surnames}`;
-            
-            confirmModal.classList.add('active');
-
-            const confirmBtn = document.getElementById('confirmTransferBtn');
-            const cancelBtn = document.getElementById('cancelTransferBtn');
-            const closeBtn = document.getElementById('closeTransferModal');
-
-            const cleanupModal = () => {
-                confirmModal.classList.remove('active');
-                confirmBtn.onclick = null;
-                cancelBtn.onclick = null;
-                closeBtn.onclick = null;
-            };
-
-            cancelBtn.onclick = cleanupModal;
-            closeBtn.onclick = cleanupModal;
-
-            confirmBtn.onclick = () => {
-                cleanupModal(); // Cerramos el modal primero
-
-                // 1. Registrar retiro del usuario actual usando el sistema del dashboard
-                const txCurrent = registerTransaction('Retiro', `Trf. enviada a Cta: ${targetAccount}`, amount);
-                
-                // 2. Sumar al usuario destino y guardar su registro en localStorage
-                const txTarget = {
-                    date: new Date().toISOString(),
-                    reference: txCurrent.reference,
-                    type: 'Consignación',
-                    concept: `Trf. recibida de Cta: ${currentUser.accountNumber}`,
-                    value: amount
-                };
-                targetUser.balance += amount;
-                targetUser.transactions.push(txTarget);
-                updateUser(targetUser); // Actualizamos el usuario destino silenciosamente
-
-                // Lógica de Contactos Frecuentes
-                const saveContactCheckbox = document.getElementById('saveContact');
-                if (saveContactCheckbox && saveContactCheckbox.checked) {
-                    currentUser.contacts = currentUser.contacts || [];
-                    const exists = currentUser.contacts.find(c => c.account === targetAccount);
-                    if (!exists) {
-                        currentUser.contacts.push({ 
-                            account: targetAccount, 
-                            name: `${targetUser.names} ${targetUser.surnames}` 
-                        });
-                        updateUser(currentUser);
-                        renderContacts();
-                    }
-                }
-
-                showToast('Transferencia exitosa', 'success');
-                transferForm.reset();
-                showPrintModalForTransaction(txCurrent);
-            };
-        });
-    }
-
-    // Loan Form (Asincronía)
-    const loanForm = document.getElementById('loanForm');
-    if (loanForm) {
-        loanForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const amount = parseFloat(document.getElementById('loanAmount').value);
-            const installments = document.getElementById('loanInstallments').value;
-            const submitBtn = document.getElementById('loanSubmitBtn');
-            
-            if (!amount || !installments || amount < 50000) {
-                showToast('El monto mínimo es de $50,000', 'error');
-                return;
-            }
-
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = 'Analizando perfil crediticio... ⏳';
-            submitBtn.disabled = true;
-
-            try {
-                // AWAIT: Detenemos la ejecución esperando a "Datacrédito"
-                await simularAnalisisCredito(amount);
-                
-                // Si llegamos aquí, la Promesa hizo resolve()
-                currentUser.loans = currentUser.loans || [];
-                currentUser.loans.push({
-                    id: `CR-${Math.floor(Math.random() * 90000) + 10000}`,
-                    amount: amount,
-                    installments: parseInt(installments),
-                    remaining: amount,
-                    date: new Date().toISOString(),
-                    status: 'Activo'
-                });
-                
-                // Reutilizamos nuestra arquitectura existente para registrar el ingreso del dinero
-                const tx = registerTransaction('Consignación', `Desembolso Crédito Aprobado a ${installments} meses`, amount);
-                
-                renderActiveLoans();
-                showToast('¡Crédito Aprobado y Desembolsado!', 'success');
-                loanForm.reset();
-                showPrintModalForTransaction(tx);
-                
-            } catch (error) {
-                // Si llegamos aquí, la Promesa hizo reject()
-                showToast('Lo sentimos, solicitud rechazada por riesgo', 'error');
-            } finally {
-                // Pase lo que pase, restauramos el botón
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-            }
-        });
-    }
-
-    // Services Form
-    const servicesForm = document.getElementById('servicesForm');
-    if (servicesForm) {
-        servicesForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const serviceType = document.getElementById('serviceType').value;
-            const ref = document.getElementById('serviceRef').value;
-            const amount = parseFloat(document.getElementById('serviceAmount').value);
-            
-            if (!serviceType || !ref || amount <= 0) {
-                showToast('Por favor, complete correctamente el formulario', 'error');
-                return;
-            }
-
-            if (amount > currentUser.balance) {
-                showToast('Saldo insuficiente para pagar este servicio', 'error');
-                return;
-            }
-
-            const tx = registerTransaction('Retiro', `Pago de servicio público ${serviceType} (Ref: ${ref})`, amount);
-            showToast('Pago de servicio exitoso', 'success');
-            servicesForm.reset();
-            showPrintModalForTransaction(tx);
-        });
-    }
+    // ----------------------
+    // FUNCIONALIDAD 3: Metas de Ahorro
+    // ----------------------
+    document.getElementById('goalForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = document.getElementById('goalName').value.trim();
+        const target = document.getElementById('goalTarget').value;
+        addSavingsGoal(name, target);
+        e.target.reset();
+    });
 
     // Logout
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            logout();
-            window.location.href = 'index.html';
-        });
-    }
+    document.getElementById('logoutBtn')?.addEventListener('click', () => {
+        logout();
+        window.location.href = 'index.html';
+    });
 }
+
+// ============================================================
+// NAVEGACIÓN
+// ============================================================
 
 function setupNavigation() {
     const links = document.querySelectorAll('.nav-links a');
@@ -412,328 +228,447 @@ function setupNavigation() {
     const pageTitle = document.getElementById('pageTitle');
 
     const titles = {
-        'resume': 'Resumen de Cuenta',
+        'resume': 'Resumen Financiero',
         'transactions': 'Historial de Transacciones',
-        'transfer': 'Transferencia Directa',
         'deposit': 'Consignación Electrónica',
         'withdraw': 'Retiro de Dinero',
+        'transfer': 'Transferencia Bancaria',
         'services': 'Pago de Servicios',
-        'loans': 'Centro de Créditos',
+        'savings': 'Metas de Ahorro',
         'certificate': 'Certificado Bancario'
     };
 
     links.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            // Remove active classes
             links.forEach(l => l.classList.remove('active'));
             sections.forEach(s => s.classList.remove('active'));
-            
-            // Add active class
+
             link.classList.add('active');
             const targetId = link.getAttribute('data-target');
-            document.getElementById(targetId).classList.add('active');
-            
-            // Update Title
-            pageTitle.textContent = titles[targetId];
+            document.getElementById(targetId)?.classList.add('active');
+            pageTitle.textContent = titles[targetId] || '';
 
-            // Specific refresh
+            // Refresco específico por sección
             if (targetId === 'transactions') updateTransactionsView();
             if (targetId === 'certificate') updateCertificateView();
             if (targetId === 'resume') updateResumeView();
+            if (targetId === 'savings') loadSavingsGoals(); // FUNCIONALIDAD 3
         });
     });
 }
+
+// ============================================================
+// IMPRESIÓN
+// ============================================================
 
 function setupPrintFunctionality() {
-    // Print Transactions
-    const printTxBtn = document.getElementById('printTransactionsBtn');
-    if (printTxBtn) {
-        printTxBtn.addEventListener('click', () => {
-            const originalContent = document.body.innerHTML;
-            const printArea = document.getElementById('transactionsPrintArea').innerHTML;
-            
-            document.body.innerHTML = `
-                <div style="padding: 20px;">
-                    <h2>Banco Acme - Últimas Transacciones</h2>
-                    <p>Titular: ${currentUser.names} ${currentUser.surnames} - Cuenta: ${currentUser.accountNumber}</p>
-                    <hr>
-                    ${printArea}
-                </div>
-            `;
-            window.print();
-            document.body.innerHTML = originalContent;
-            window.location.reload(); 
-        });
-    }
-
-    // Print Certificate
-    const printCertBtn = document.getElementById('printCertBtn');
-    if (printCertBtn) {
-        printCertBtn.addEventListener('click', () => {
-            const originalContent = document.body.innerHTML;
-            const printArea = document.getElementById('certificatePrintArea').innerHTML;
-            
-            document.body.innerHTML = `
-                <div style="max-width: 800px; margin: 40px auto;">
-                    ${printArea}
-                </div>
-            `;
-            window.print();
-            document.body.innerHTML = originalContent;
-            window.location.reload();
-        });
-    }
-
-    // Modal close
-    const closeModal = document.getElementById('closePrintModal');
-    if (closeModal) {
-        closeModal.addEventListener('click', () => {
-            document.getElementById('printModal').classList.remove('active');
-        });
-    }
-    
-    // Al tocar fuera del modal
-    window.addEventListener('click', (e) => {
-        const modal = document.getElementById('printModal');
-        if (e.target === modal) {
-            modal.classList.remove('active');
-        }
+    // Imprimir transacciones
+    document.getElementById('printTransactionsBtn')?.addEventListener('click', () => {
+        const printArea = document.getElementById('transactionsPrintArea').innerHTML;
+        const original = document.body.innerHTML;
+        document.body.innerHTML = `
+            <div style="padding:20px;">
+                <h2>Banco Acme — Últimas Transacciones</h2>
+                <p>Titular: ${currentUser.names} ${currentUser.surnames} — Cuenta: ${currentUser.accountNumber}</p>
+                <hr>${printArea}
+            </div>`;
+        window.print();
+        document.body.innerHTML = original;
+        window.location.reload();
     });
 
-    // Print Voucher Button
-    const printVoucherBtn = document.getElementById('printVoucherBtn');
-    if (printVoucherBtn) {
-        printVoucherBtn.addEventListener('click', () => {
-            window.print();
-        });
-    }
+    // Imprimir certificado
+    document.getElementById('printCertBtn')?.addEventListener('click', () => {
+        const printArea = document.getElementById('certificatePrintArea').innerHTML;
+        const original = document.body.innerHTML;
+        document.body.innerHTML = `<div style="max-width:800px; margin:40px auto;">${printArea}</div>`;
+        window.print();
+        document.body.innerHTML = original;
+        window.location.reload();
+    });
+
+    // Cerrar modal
+    document.getElementById('closePrintModal')?.addEventListener('click', () => {
+        document.getElementById('printModal').classList.remove('active');
+    });
+
+    window.addEventListener('click', (e) => {
+        const modal = document.getElementById('printModal');
+        if (e.target === modal) modal.classList.remove('active');
+    });
+
+    document.getElementById('printVoucherBtn')?.addEventListener('click', () => window.print());
+
+    // ----------------------
+    // FUNCIONALIDAD 1: Exportar CSV
+    // ----------------------
+    document.getElementById('exportCsvBtn')?.addEventListener('click', () => {
+        exportTransactionsToCSV(currentUser);
+    });
 }
 
-/**
- * ==============================================================
- * TEMAS 6, 7 y 10: Solicitudes (Fetch) y Manipulación Avanzada
- * ==============================================================
- */
-async function loadExchangeRates() {
+// ============================================================
+// FUNCIONALIDAD 1: EXPORTAR CSV
+// ============================================================
+
+function exportTransactionsToCSV(user) {
+    if (!user.transactions || user.transactions.length === 0) {
+        showToast('No hay transacciones para exportar', 'error');
+        return;
+    }
+
+    // Encabezados de columnas
+    const headers = ['Fecha', 'Referencia', 'Tipo', 'Concepto', 'Valor (COP)'];
+
+    // Convertimos cada transacción a fila CSV
+    const rows = user.transactions.map(tx => {
+        const fecha = new Date(tx.date).toLocaleDateString('es-CO');
+        const valor = tx.type === 'Consignación' ? tx.value : -tx.value;
+        const concepto = `"${tx.concept}"`;
+        return [fecha, tx.reference, tx.type, concepto, valor].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+
+    // Creamos el Blob (archivo en memoria)
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
+    // URL temporal que apunta al Blob
+    const url = URL.createObjectURL(blob);
+
+    // <a> invisible para forzar la descarga
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `historial_${user.accountNumber}_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Liberamos memoria
+    URL.revokeObjectURL(url);
+
+    showToast('Historial exportado exitosamente', 'success');
+}
+
+// ============================================================
+// FUNCIONALIDAD 2: TRANSFERENCIAS ENTRE CUENTAS
+// ============================================================
+
+function realizarTransferencia(accountNumberDestino, monto) {
+    // Leemos todos los usuarios directamente de localStorage
+    const users = JSON.parse(localStorage.getItem('banco_acme_users')) || [];
+    const destino = users.find(u => u.accountNumber === accountNumberDestino);
+
+    if (!destino) {
+        showToast('Número de cuenta destino no encontrado', 'error');
+        return;
+    }
+
+    if (destino.accountNumber === currentUser.accountNumber) {
+        showToast('No puedes transferirte a tu propia cuenta', 'error');
+        return;
+    }
+
+    if (!monto || monto <= 0) {
+        showToast('El monto debe ser mayor a 0', 'error');
+        return;
+    }
+
+    if (monto > currentUser.balance) {
+        showToast('Saldo insuficiente para la transferencia', 'error');
+        return;
+    }
+
+    const ref = generateReference();
+    const fecha = new Date().toISOString();
+
+    // Transacción de DÉBITO en el usuario origen (nosotros)
+    const txOrigen = {
+        date: fecha,
+        reference: ref,
+        type: 'Retiro',
+        concept: `Transferencia enviada a cuenta ${accountNumberDestino}`,
+        value: monto
+    };
+    currentUser.balance -= monto;
+    currentUser.transactions.push(txOrigen);
+    updateUser(currentUser);
+
+    // Transacción de CRÉDITO en el usuario destino
+    const txDestino = {
+        date: fecha,
+        reference: ref,
+        type: 'Consignación',
+        concept: `Transferencia recibida de cuenta ${currentUser.accountNumber}`,
+        value: monto
+    };
+    destino.balance += monto;
+    destino.transactions.push(txDestino);
+    updateUser(destino);
+
+    // Notificación del sistema
+    notificarTransaccion(
+        'Transferencia enviada',
+        `${formatCurrency(monto)} enviados a ${accountNumberDestino}`,
+        'transferencia'
+    );
+
+    // CustomEvent para actualizar la UI
+    document.dispatchEvent(new CustomEvent('bancoAcme:nuevaTransaccion', { detail: txOrigen }));
+
+    showToast(`Transferencia de ${formatCurrency(monto)} enviada exitosamente`, 'success');
+    showPrintModalForTransaction(txOrigen);
+}
+
+// ============================================================
+// FUNCIONALIDAD 3: METAS DE AHORRO
+// ============================================================
+
+function loadSavingsGoals() {
+    const goals = getSavingsGoals(currentUser.docNumber);
+    const container = document.getElementById('goalsContainer');
+    if (!container) return;
+
+    // Limpiamos con jerarquía DOM (Tema 7)
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+
+    if (goals.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'text-muted';
+        empty.textContent = 'No tienes metas definidas aún.';
+        container.appendChild(empty);
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    goals.forEach((goal, index) => {
+        const progreso = Math.min((currentUser.balance / goal.target) * 100, 100).toFixed(1);
+        const completada = currentUser.balance >= goal.target;
+
+        const card = document.createElement('div');
+        card.style.cssText = `
+            background: rgba(30,30,32,0.4);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        `;
+
+        // Header con nombre y badge
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;';
+
+        const nombre = document.createElement('strong');
+        nombre.textContent = goal.name;
+
+        const badge = document.createElement('span');
+        badge.className = `type-badge ${completada ? 'type-consignacion' : 'type-retiro'}`;
+        badge.textContent = completada ? '✓ Lograda' : `${progreso}%`;
+
+        header.append(nombre, badge);
+
+        // Barra de progreso
+        const barContainer = document.createElement('div');
+        barContainer.style.cssText = 'background:rgba(255,255,255,0.08); border-radius:980px; height:6px; overflow:hidden; margin-bottom:0.8rem;';
+
+        const bar = document.createElement('div');
+        bar.style.cssText = `height:100%; width:${progreso}%; background:${completada ? '#34c759' : '#0071e3'}; border-radius:980px; transition:width 0.6s ease;`;
+        barContainer.appendChild(bar);
+
+        // Detalle
+        const detalle = document.createElement('div');
+        detalle.style.cssText = 'display:flex; justify-content:space-between; font-size:0.85rem; color:rgba(255,255,255,0.4);';
+        detalle.innerHTML = `
+            <span>Balance actual: <strong style="color:white">${formatCurrency(currentUser.balance)}</strong></span>
+            <span>Meta: <strong style="color:white">${formatCurrency(goal.target)}</strong></span>
+        `;
+
+        // Botón eliminar
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Eliminar meta';
+        deleteBtn.style.cssText = 'margin-top:0.8rem; background:none; border:none; color:#ff3b30; cursor:pointer; font-size:0.85rem;';
+        deleteBtn.addEventListener('click', () => {
+            const currentGoals = getSavingsGoals(currentUser.docNumber);
+            currentGoals.splice(index, 1);
+            saveSavingsGoals(currentUser.docNumber, currentGoals);
+            loadSavingsGoals();
+        });
+
+        card.append(header, barContainer, detalle, deleteBtn);
+        fragment.appendChild(card);
+    });
+
+    container.appendChild(fragment);
+}
+
+function addSavingsGoal(name, target) {
+    if (!name || target <= 0) {
+        showToast('Completa la meta correctamente', 'error');
+        return;
+    }
+
+    const goals = getSavingsGoals(currentUser.docNumber);
+
+    // Spread operator para no mutar el array original
+    const newGoals = [...goals, {
+        name,
+        target: parseFloat(target),
+        createdAt: new Date().toISOString()
+    }];
+
+    saveSavingsGoals(currentUser.docNumber, newGoals);
+    showToast(`Meta "${name}" creada exitosamente`, 'success');
+    loadSavingsGoals();
+}
+
+// ============================================================
+// FUNCIONALIDAD 4: NOTIFICACIONES DEL NAVEGADOR
+// ============================================================
+
+async function requestNotificationPermission() {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission !== 'denied') {
+        const permiso = await Notification.requestPermission();
+        return permiso === 'granted';
+    }
+    return false;
+}
+
+async function notificarTransaccion(titulo, cuerpo, tipo = 'info') {
+    const tienePermiso = await requestNotificationPermission();
+    if (!tienePermiso) return;
+
+    const iconos = {
+        consignacion: '💰',
+        retiro: '💸',
+        transferencia: '🔁',
+        info: '🏦'
+    };
+
+    const notificacion = new Notification(`${iconos[tipo]} Banco Acme`, {
+        body: `${titulo}\n${cuerpo}`,
+        icon: 'img/ChatGPT Image 10 abr 2026, 08_13_43 a.m..png',
+        tag: `banco-acme-${Date.now()}`,
+        silent: false
+    });
+
+    setTimeout(() => notificacion.close(), 5000);
+
+    notificacion.onclick = () => {
+        window.focus();
+        notificacion.close();
+    };
+}
+
+// ============================================================
+// FUNCIONALIDAD 5: WEB WORKER PARA TASAS DE CAMBIO
+// ============================================================
+
+function loadExchangeRatesWithWorker() {
     const container = document.getElementById('tasasContainer');
     const status = document.getElementById('tasasStatus');
     if (!container || !status) return;
 
-    try {
-        // TEMA 10: Solicitudes (fetch API real)
-        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-        if (!response.ok) throw new Error('Error en la red');
-        
-        const data = await response.json();
-        const rates = {
-            'Pesos (COP)': data.rates.COP,
-            'Euros (EUR)': data.rates.EUR,
-            'Libras (GBP)': data.rates.GBP
-        };
+    // Si el navegador no soporta Workers, usamos fetch directo como fallback
+    if (!window.Worker) {
+        loadExchangeRatesFallback();
+        return;
+    }
 
-        // TEMA 6 y 7: Manipulación Avanzada del DOM y Jerarquía de Nodos
-        
-        // 1. Limpiamos el contenedor usando recorrido y jerarquía (Más veloz que innerHTML = '')
-        while (container.firstChild) {
-            container.removeChild(container.firstChild);
+    // Creamos el Worker en su propio hilo
+    const worker = new Worker('js/workers/exchangeWorker.js');
+
+    // Le enviamos la orden de trabajo
+    worker.postMessage('fetchRates');
+
+    // Escuchamos la respuesta
+    worker.onmessage = function(e) {
+        const { success, rates, error } = e.data;
+
+        if (!success) {
+            status.textContent = 'Fallo al conectar';
+            status.className = 'type-badge type-retiro';
+            worker.terminate();
+            return;
         }
 
-        // 2. DocumentFragment: Un "DOM invisible" que ayuda al rendimiento
-        // Al armar los nodos en este fragmento virtual, el navegador no redibuja la pantalla muchas veces
+        // Renderizamos con DOM puro (Tema 6 y 7)
+        while (container.firstChild) container.removeChild(container.firstChild);
+
+        const nombresMonedas = { COP: 'Pesos (COP)', EUR: 'Euros (EUR)', GBP: 'Libras (GBP)' };
         const fragment = document.createDocumentFragment();
 
-        for (const [currencyName, rateValue] of Object.entries(rates)) {
-            // TEMA 6: Creación de Nodos directos y clases
+        for (const [codigo, valor] of Object.entries(rates)) {
             const card = document.createElement('div');
-            card.classList.add('balance-meta');
-            card.style.flex = '1';
-            card.style.minWidth = '140px';
-            card.style.padding = '1rem';
-            card.style.borderRadius = '12px';
-            card.style.border = '1px solid #d2d2d7';
+            card.style.cssText = 'flex:1; min-width:140px; padding:1rem; border-radius:12px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03);';
 
             const nameEl = document.createElement('div');
-            nameEl.classList.add('meta-label');
-            nameEl.textContent = `1 Dólar =`;
+            nameEl.className = 'meta-label';
+            nameEl.textContent = '1 Dólar =';
 
             const valueEl = document.createElement('strong');
-            valueEl.style.fontSize = '1.3rem';
-            valueEl.style.display = 'block';
-            valueEl.style.marginTop = '0.5rem';
-            valueEl.textContent = `${rateValue.toLocaleString('es-CO')} ${currencyName.substring(0, 3)}`;
+            valueEl.style.cssText = 'font-size:1.3rem; display:block; margin-top:0.5rem;';
+            valueEl.textContent = `${valor.toLocaleString('es-CO')} ${codigo}`;
 
-            // TEMA 7: Ensamblaje de jerarquías avanzadas (usando .append en lugar de innerHTML)
-            card.append(nameEl, valueEl); 
-            
-            // Insertamos la tarjeta en nuestro DOM Virtual
+            card.append(nameEl, valueEl);
             fragment.append(card);
         }
 
-        // 3. Un solo impacto a la vista del usuario
-        // Metemos el paquete completo al DOM real
+        container.style.cssText = 'display:flex; gap:1rem; flex-wrap:wrap; margin-top:1rem;';
         container.append(fragment);
-        
+
         status.textContent = 'Actualizado ✅';
         status.className = 'type-badge type-consignacion';
 
+        // Terminamos el Worker, ya hizo su trabajo
+        worker.terminate();
+    };
+
+    worker.onerror = function(err) {
+        console.error('Error en Worker:', err);
+        status.textContent = 'Error en Worker';
+        status.className = 'type-badge type-retiro';
+        worker.terminate();
+    };
+}
+
+// Fallback por si el navegador no soporta Workers
+async function loadExchangeRatesFallback() {
+    const container = document.getElementById('tasasContainer');
+    const status = document.getElementById('tasasStatus');
+    try {
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        if (!response.ok) throw new Error('Error de red');
+        const data = await response.json();
+        const rates = { COP: data.rates.COP, EUR: data.rates.EUR, GBP: data.rates.GBP };
+
+        while (container.firstChild) container.removeChild(container.firstChild);
+        const fragment = document.createDocumentFragment();
+
+        for (const [codigo, valor] of Object.entries(rates)) {
+            const card = document.createElement('div');
+            card.style.cssText = 'flex:1; min-width:140px; padding:1rem; border-radius:12px; border:1px solid rgba(255,255,255,0.08);';
+            const nameEl = document.createElement('div');
+            nameEl.className = 'meta-label';
+            nameEl.textContent = '1 Dólar =';
+            const valueEl = document.createElement('strong');
+            valueEl.style.cssText = 'font-size:1.3rem; display:block; margin-top:0.5rem;';
+            valueEl.textContent = `${valor.toLocaleString('es-CO')} ${codigo}`;
+            card.append(nameEl, valueEl);
+            fragment.append(card);
+        }
+
+        container.style.cssText = 'display:flex; gap:1rem; flex-wrap:wrap; margin-top:1rem;';
+        container.append(fragment);
+        status.textContent = 'Actualizado ✅';
+        status.className = 'type-badge type-consignacion';
     } catch (error) {
-        console.error('Error fetching rates:', error);
         status.textContent = 'Fallo al conectar';
         status.className = 'type-badge type-retiro';
     }
 }
-
-// ==========================================
-// NUEVAS FUNCIONALIDADES AVANZADAS
-// ==========================================
-
-function setupInactivityTimer() {
-    const resetTimer = () => {
-        clearTimeout(inactivityTimeout);
-        inactivityTimeout = setTimeout(() => {
-            logout();
-            window.location.href = 'index.html';
-        }, 2 * 60 * 1000); // 2 minutos
-    };
-
-    document.addEventListener('mousemove', resetTimer);
-    document.addEventListener('keydown', resetTimer);
-    document.addEventListener('click', resetTimer);
-    
-    resetTimer(); // Iniciar
-}
-
-function updateFlowChartView() {
-    if (!currentUser) return;
-    
-    let totalIncome = 0;
-    let totalExpense = 0;
-
-    currentUser.transactions.forEach(tx => {
-        if (tx.type === 'Consignación') totalIncome += tx.value;
-        else totalExpense += tx.value;
-    });
-
-    const max = Math.max(totalIncome, totalExpense);
-    
-    const incomeBar = document.getElementById('incomeBar');
-    const expenseBar = document.getElementById('expenseBar');
-    const incomeText = document.getElementById('incomeText');
-    const expenseText = document.getElementById('expenseText');
-
-    if (max === 0) {
-        if (incomeBar) incomeBar.style.height = '0%';
-        if (expenseBar) expenseBar.style.height = '0%';
-    } else {
-        const incomePercent = (totalIncome / max) * 100;
-        const expensePercent = (totalExpense / max) * 100;
-        
-        if (incomeBar) incomeBar.style.height = `${incomePercent}%`;
-        if (expenseBar) expenseBar.style.height = `${expensePercent}%`;
-    }
-
-    if (incomeText) incomeText.textContent = formatCurrency(totalIncome);
-    if (expenseText) expenseText.textContent = formatCurrency(totalExpense);
-}
-
-function setupPagination() {
-    const prevBtn = document.getElementById('prevPageBtn');
-    const nextBtn = document.getElementById('nextPageBtn');
-    
-    if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-            if (currentTxPage > 1) {
-                currentTxPage--;
-                updateTransactionsView();
-            }
-        });
-    }
-    
-    if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            currentTxPage++;
-            updateTransactionsView();
-        });
-    }
-}
-
-function renderContacts() {
-    const container = document.getElementById('contactsContainer');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    if (!currentUser.contacts || currentUser.contacts.length === 0) {
-        return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    currentUser.contacts.forEach(contact => {
-        const badge = document.createElement('div');
-        badge.className = 'type-badge type-consignacion';
-        badge.style.cursor = 'pointer';
-        badge.style.padding = '0.5rem 1rem';
-        badge.style.borderRadius = '980px';
-        badge.textContent = `${contact.name}`;
-        badge.title = contact.account;
-        
-        badge.addEventListener('click', () => {
-            const targetInput = document.getElementById('targetAccount');
-            if (targetInput) targetInput.value = contact.account;
-        });
-        
-        fragment.appendChild(badge);
-    });
-    
-    container.appendChild(fragment);
-}
-
-function simularAnalisisCredito(monto) {
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            // 70% de probabilidad de aprobación
-            if (Math.random() > 0.3) {
-                resolve({ aprobado: true, monto });
-            } else {
-                reject(new Error('Perfil de riesgo alto'));
-            }
-        }, 3000); // Tarda 3 segundos
-    });
-}
-
-function renderActiveLoans() {
-    const container = document.getElementById('activeLoansContainer');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    if (!currentUser.loans || currentUser.loans.length === 0) {
-        return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    currentUser.loans.forEach(loan => {
-        const card = document.createElement('div');
-        card.classList.add('panel');
-        card.style.flex = '1';
-        card.style.minWidth = '250px';
-        card.style.borderTop = '4px solid #ff3b30'; // Línea roja de deuda
-        card.style.padding = '1.5rem';
-        
-        card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <span class="type-badge type-retiro" style="font-size: 0.75rem;">${loan.status}</span>
-                <span style="font-size: 0.8rem; color: #6e6e73;">${loan.id}</span>
-            </div>
-            <h4 style="margin: 0.5rem 0; font-size: 1.1rem; color: #1d1d1f;">Deuda Actual</h4>
-            <strong style="font-size: 1.5rem; color: #ff3b30; display: block;">${formatCurrency(loan.remaining)}</strong>
-            <p style="font-size: 0.85rem; color: #6e6e73; margin-top: 0.8rem;">Préstamo original: <br><strong>${formatCurrency(loan.amount)}</strong> a ${loan.installments} cuotas</p>
-        `;
-        
-        fragment.appendChild(card);
-    });
-    
-    container.appendChild(fragment);
-}
-
