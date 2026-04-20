@@ -80,7 +80,7 @@ function updateTokenUI() {
     }
     
     secondsLeftDisplay.textContent = secondsLeft;
-    progressBar.style.width = \`\${progressPercent}%\`;
+    progressBar.style.width = `${progressPercent}%`;
     
     // Alerta visual de expiración próxima
     if (secondsLeft <= 5) {
