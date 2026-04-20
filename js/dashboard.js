@@ -1,5 +1,6 @@
 import { getCurrentUser, updateUser, logout, isAuthenticated, getSavingsGoals, saveSavingsGoals } from './storage.js';
 import { showToast, formatCurrency, formatDate, generateReference } from './ui.js';
+import { initDynamicToken, validateToken } from './6_clave_dinamica.js';
 
 let currentUser = null;
 
@@ -21,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupForms();
     setupPrintFunctionality();
     loadExchangeRatesWithWorker();
+    
+    // Iniciar el widget de clave dinámica
+    initDynamicToken('dynamicTokenContainer');
 
     // TEMA 8: Escuchamos el CustomEvent de nueva transacción
     document.addEventListener('bancoAcme:nuevaTransaccion', (e) => {
@@ -194,6 +198,13 @@ function setupForms() {
     // ----------------------
     document.getElementById('transferForm')?.addEventListener('submit', (e) => {
         e.preventDefault();
+        
+        const tokenInput = document.getElementById('transferToken').value.trim();
+        if (!validateToken(tokenInput)) {
+            showToast('Clave dinámica incorrecta o expirada', 'error');
+            return;
+        }
+
         const cuenta = document.getElementById('transferAccount').value.trim();
         const monto = parseFloat(document.getElementById('transferAmount').value);
         realizarTransferencia(cuenta, monto);
