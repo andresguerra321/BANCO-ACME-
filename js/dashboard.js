@@ -245,6 +245,7 @@ function setupNavigation() {
         'withdraw': 'Retiro de Dinero',
         'transfer': 'Transferencia Bancaria',
         'services': 'Pago de Servicios',
+        'reports': 'Reporte de Egresos',
         'savings': 'Metas de Ahorro',
         'certificate': 'Certificado Bancario'
     };
@@ -264,6 +265,7 @@ function setupNavigation() {
             if (targetId === 'transactions') updateTransactionsView();
             if (targetId === 'certificate') updateCertificateView();
             if (targetId === 'resume') updateResumeView();
+            if (targetId === 'reports') updateReportsView();
             if (targetId === 'savings') loadSavingsGoals(); // FUNCIONALIDAD 3
         });
     });
@@ -682,4 +684,87 @@ async function loadExchangeRatesFallback() {
         status.textContent = 'Fallo al conectar';
         status.className = 'type-badge type-retiro';
     }
+}
+
+// ============================================================
+// REQUERIMIENTO: REPORTE DE EGRESOS MENSUALES
+// ============================================================
+
+function updateReportsView() {
+    const tbody = document.getElementById('reportsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const transactions = currentUser.transactions || [];
+    const egresos = transactions.filter(tx => tx.type === 'Retiro');
+
+    if (egresos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center">No hay egresos registrados</td></tr>';
+        return;
+    }
+
+    // Agrupar por mes/año
+    const reports = {};
+
+    egresos.forEach(tx => {
+        const date = new Date(tx.date);
+        const monthYear = date.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+        
+        if (!reports[monthYear]) {
+            reports[monthYear] = {
+                monthYear,
+                retiros: 0,
+                luz: 0,
+                agua: 0,
+                gas: 0,
+                telecom: 0,
+                transferencias: 0,
+                total: 0
+            };
+        }
+
+        const concept = tx.concept.toLowerCase();
+        const value = parseFloat(tx.value);
+
+        if (concept.includes('pago de servicio público luz')) {
+            reports[monthYear].luz += value;
+        } else if (concept.includes('pago de servicio público agua')) {
+            reports[monthYear].agua += value;
+        } else if (concept.includes('pago de servicio público gas')) {
+            reports[monthYear].gas += value;
+        } else if (concept.includes('pago de servicio público telecom')) {
+            reports[monthYear].telecom += value;
+        } else if (concept.includes('transferencia enviada')) {
+            reports[monthYear].transferencias += value;
+        } else if (concept === 'retiro de dinero') {
+            reports[monthYear].retiros += value;
+        } else {
+            // Otros retiros no clasificados
+            reports[monthYear].retiros += value;
+        }
+
+        reports[monthYear].total += value;
+    });
+
+    // Renderizar filas (orden descendente por fecha)
+    // Nota: Como reports es un objeto, el orden no está garantizado, 
+    // pero podemos convertirlo a array y ordenar si es necesario.
+    const sortedReports = Object.values(reports).reverse();
+
+    sortedReports.forEach(report => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="text-transform: capitalize; font-weight: 500;">${report.monthYear}</td>
+            <td class="text-right">${formatCurrency(report.retiros)}</td>
+            <td class="text-right">${formatCurrency(report.luz)}</td>
+            <td class="text-right">${formatCurrency(report.agua)}</td>
+            <td class="text-right">${formatCurrency(report.gas)}</td>
+            <td class="text-right">${formatCurrency(report.telecom)}</td>
+            <td class="text-right">${formatCurrency(report.transferencias)}</td>
+            <td class="text-right" style="font-weight: 700; color: var(--primary-color);">
+                ${formatCurrency(report.total)}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
 }

@@ -22,6 +22,7 @@
                 <li><a href="#" data-target="withdraw">Retirar</a></li>
                 <li><a href="#" data-target="transfer">Transferir</a></li>
                 <li><a href="#" data-target="services">Servicios</a></li>
+                <li><a href="#" data-target="reports">Reportes</a></li>
                 <li><a href="#" data-target="savings">Metas</a></li>
                 <li><a href="#" data-target="certificate">Descargas</a></li>
             </ul>
@@ -185,6 +186,35 @@
                         </div>
                         <button type="submit" class="btn-premium full-w" style="margin-top: 1rem;">Aplicar y Descontar</button>
                     </form>
+                </div>
+            </section>
+            
+            <!-- ===================== REPORTES (NUEVA) ===================== -->
+            <section id="reports" class="view-section">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>Reporte de Egresos Mensuales</h3>
+                        <p class="text-muted">Resumen consolidado de tus salidas de dinero por mes.</p>
+                    </div>
+                    <div class="table-container">
+                        <table class="apple-table">
+                            <thead>
+                                <tr>
+                                    <th>Mes / Año</th>
+                                    <th class="text-right">Retiros</th>
+                                    <th class="text-right">Luz</th>
+                                    <th class="text-right">Agua</th>
+                                    <th class="text-right">Gas</th>
+                                    <th class="text-right">Telecom</th>
+                                    <th class="text-right">Transf.</th>
+                                    <th class="text-right" style="font-weight: 700;">Total Mes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportsTableBody">
+                                <!-- Se llena dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
